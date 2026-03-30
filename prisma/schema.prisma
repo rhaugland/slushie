@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  firm      String    // "w3" | "isotropic"
+  createdAt DateTime  @default(now())
+  meetings  Meeting[]
+}
+
+model Meeting {
+  id         String      @id @default(cuid())
+  clientId   String
+  audioUrl   String
+  transcript String?     @db.Text
+  status     String      @default("uploading") // uploading | transcribing | extracting | ready | failed
+  createdAt  DateTime    @default(now())
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  objectives Objective[]
+
+  @@index([clientId])
+}
+
+model Objective {
+  id          String   @id @default(cuid())
+  meetingId   String
+  title       String
+  description String   @db.Text
+  priority    String?  // high | medium | low
+  status      String   @default("draft") // draft | selected | architecting | building | deployed
+  createdAt   DateTime @default(now())
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  builds      Build[]
+
+  @@index([meetingId])
+}
+
+model Build {
+  id            String   @id @default(cuid())
+  objectiveId   String
+  architectPlan Json
+  sourceCodeUrl String?
+  deployUrl     String?
+  deployStatus  String   @default("planning") // planning | building | deploying | live | failed
+  logs          String?  @db.Text
+  createdAt     DateTime @default(now())
+  objective     Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+
+  @@index([objectiveId])
+}
