@@ -84,6 +84,25 @@ export default function Home() {
     loadClients();
   }, [loadClients]);
 
+  useEffect(() => {
+    const selected = clients.find((c) => c.id === selectedId) || null;
+    if (!selected) return;
+
+    const hasActiveJob = selected.meetings.some(
+      (m) => ["transcribing", "extracting"].includes(m.status)
+    ) || selected.meetings.some((m) =>
+      m.objectives.some((o) =>
+        ["selected", "architecting", "building"].includes(o.status) ||
+        o.builds.some((b) => ["building", "deploying"].includes(b.deployStatus))
+      )
+    );
+
+    if (!hasActiveJob) return;
+
+    const interval = setInterval(loadClients, 2000);
+    return () => clearInterval(interval);
+  }, [selectedId, clients, loadClients]);
+
   const selected = clients.find((c) => c.id === selectedId) || null;
 
   const allObjectives = selected?.meetings.flatMap((m) => m.objectives) || [];
