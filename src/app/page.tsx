@@ -7,6 +7,7 @@ import { ProgressStepper, StepKey } from "@/components/progress-stepper";
 import { StepUpload } from "@/components/step-upload";
 import { StepObjectives } from "@/components/step-objectives";
 import { StepArchitect } from "@/components/step-architect";
+import { StepBuild } from "@/components/step-build";
 
 type ArchitectPlan = {
   summary: string;
@@ -15,7 +16,7 @@ type ArchitectPlan = {
   fileStructure: string[];
   implementationSteps: string[];
 };
-type Build = { id: string; deployUrl: string | null; deployStatus: string; architectPlan: ArchitectPlan };
+type Build = { id: string; deployUrl: string | null; deployStatus: string; architectPlan: ArchitectPlan; logs: string | null };
 type Objective = { id: string; title: string; description: string; priority: string | null; status: string; builds: Build[] };
 type Meeting = { id: string; status: string; createdAt: string; transcript?: string | null; objectives: Objective[] };
 type Client = {
@@ -151,7 +152,24 @@ export default function Home() {
                   />
                 );
               })()}
-              {!["upload", "objectives", "architect"].includes(stepInfo.current) && (
+              {stepInfo.current === "build" && (() => {
+                const activeObj = selected.meetings
+                  .flatMap((m) => m.objectives)
+                  .find((o) => o.status === "building");
+                if (!activeObj) return null;
+                const latestBuild = activeObj.builds[activeObj.builds.length - 1];
+                if (!latestBuild) return null;
+                return (
+                  <StepBuild
+                    objectiveTitle={activeObj.title}
+                    buildId={latestBuild.id}
+                    deployStatus={latestBuild.deployStatus}
+                    logs={latestBuild.logs ?? null}
+                    onBuildComplete={loadClients}
+                  />
+                );
+              })()}
+              {!["upload", "objectives", "architect", "build"].includes(stepInfo.current) && (
                 <p className="text-sm text-white/50">Step content coming soon...</p>
               )}
             </div>
