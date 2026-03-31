@@ -8,6 +8,7 @@ import { StepUpload } from "@/components/step-upload";
 import { StepObjectives } from "@/components/step-objectives";
 import { StepArchitect } from "@/components/step-architect";
 import { StepBuild } from "@/components/step-build";
+import { StepDeploy } from "@/components/step-deploy";
 
 type ArchitectPlan = {
   summary: string;
@@ -169,9 +170,29 @@ export default function Home() {
                   />
                 );
               })()}
-              {!["upload", "objectives", "architect", "build"].includes(stepInfo.current) && (
-                <p className="text-sm text-white/50">Step content coming soon...</p>
-              )}
+              {stepInfo.current === "deploy" && (() => {
+                const allObjs = selected.meetings.flatMap((m) => m.objectives);
+                const deployedObj = allObjs.find((o) => o.status === "deployed" || o.builds.some((b) => b.deployStatus === "deploying"));
+                if (!deployedObj) return null;
+                const latestBuild = deployedObj.builds[deployedObj.builds.length - 1];
+                return (
+                  <StepDeploy
+                    objectiveTitle={deployedObj.title}
+                    deployUrl={latestBuild?.deployUrl ?? null}
+                    deployStatus={latestBuild?.deployStatus ?? "deploying"}
+                    otherObjectives={allObjs.filter((o) => o.id !== deployedObj.id)}
+                    onTackleAnother={async (id) => {
+                      await fetch(`/api/objectives/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: "selected" }),
+                      });
+                      loadClients();
+                    }}
+                    onUploadNew={loadClients}
+                  />
+                );
+              })()}
             </div>
           </div>
         ) : (

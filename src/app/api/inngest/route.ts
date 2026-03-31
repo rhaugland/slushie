@@ -4,8 +4,9 @@ import { transcribe } from "@/inngest/transcribe";
 import { extractObjectives } from "@/inngest/extract-objectives";
 import { architect } from "@/inngest/architect";
 import { build } from "@/inngest/build";
+import { deploy } from "@/inngest/deploy";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [transcribe, extractObjectives, architect, build],
+  functions: [transcribe, extractObjectives, architect, build, deploy],
 });
