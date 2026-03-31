@@ -213,6 +213,35 @@ export default function Home() {
                 );
               })()}
             </div>
+            {/* Other objectives from meetings */}
+            {(() => {
+              const allObjs = selected.meetings.flatMap((m) => m.objectives);
+              if (allObjs.length <= 1) return null;
+              return (
+                <div className="mt-6 pt-4 border-t border-white/[0.06]">
+                  <div className="text-[0.65rem] uppercase tracking-widest text-white/30 mb-2">
+                    All objectives
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {allObjs.map((obj) => (
+                      <div
+                        key={obj.id}
+                        className={`px-3 py-1.5 rounded-md text-[0.7rem] border ${
+                          obj.status === "deployed"
+                            ? "bg-green-500/10 border-green-500/20 text-green-400"
+                            : obj.status === "draft"
+                            ? "bg-white/[0.03] border-white/[0.08] text-white/40"
+                            : "bg-blue-500/10 border-blue-500/20 text-blue-300"
+                        }`}
+                      >
+                        {obj.status === "deployed" && "✓ "}
+                        {obj.title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <p className="text-white/50">Select or create a client to get started.</p>
