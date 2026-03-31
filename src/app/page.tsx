@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { ClientHeader } from "@/components/client-header";
 import { ProgressStepper, StepKey } from "@/components/progress-stepper";
+import { StepUpload } from "@/components/step-upload";
 
 type Build = { id: string; deployUrl: string | null; deployStatus: string };
 type Objective = { id: string; title: string; description: string; priority: string | null; status: string; builds: Build[] };
@@ -104,13 +105,12 @@ export default function Home() {
               <div className="text-[0.6rem] uppercase tracking-widest text-blue-500 font-semibold mb-2">
                 Step · {stepInfo.current}
               </div>
-              <p className="text-sm text-white/50">
-                {stepInfo.current === "upload" && "Drag and drop a meeting recording to get started."}
-                {stepInfo.current === "objectives" && "Processing audio..."}
-                {stepInfo.current === "architect" && "Select an objective to architect."}
-                {stepInfo.current === "build" && "Building..."}
-                {stepInfo.current === "deploy" && "Deploying..."}
-              </p>
+              {stepInfo.current === "upload" && (
+                <StepUpload clientId={selected.id} onUploadComplete={loadClients} />
+              )}
+              {stepInfo.current !== "upload" && (
+                <p className="text-sm text-white/50">Step content coming soon...</p>
+              )}
             </div>
           </div>
         ) : (
