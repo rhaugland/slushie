@@ -11,10 +11,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
     "@deepgram/sdk": "^5.0.0",
+    "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",
+    "@types/pg": "^8.20.0",
     "@vercel/blob": "^2.3.2",
     "inngest": "^4.1.0",
     "next": "16.2.1",
+    "pg": "^8.20.0",
     "prisma": "^7.6.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
