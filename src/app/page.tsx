@@ -5,10 +5,11 @@ import { Sidebar } from "@/components/sidebar";
 import { ClientHeader } from "@/components/client-header";
 import { ProgressStepper, StepKey } from "@/components/progress-stepper";
 import { StepUpload } from "@/components/step-upload";
+import { StepObjectives } from "@/components/step-objectives";
 
 type Build = { id: string; deployUrl: string | null; deployStatus: string };
 type Objective = { id: string; title: string; description: string; priority: string | null; status: string; builds: Build[] };
-type Meeting = { id: string; status: string; createdAt: string; objectives: Objective[] };
+type Meeting = { id: string; status: string; createdAt: string; transcript?: string | null; objectives: Objective[] };
 type Client = {
   id: string;
   name: string;
@@ -108,7 +109,23 @@ export default function Home() {
               {stepInfo.current === "upload" && (
                 <StepUpload clientId={selected.id} onUploadComplete={loadClients} />
               )}
-              {stepInfo.current !== "upload" && (
+              {stepInfo.current === "objectives" && selected.meetings[0] && (
+                <StepObjectives
+                  objectives={selected.meetings[0].objectives}
+                  transcript={selected.meetings[0].transcript ?? null}
+                  meetingStatus={selected.meetings[0].status}
+                  onUpdate={loadClients}
+                  onSelectObjective={async (id) => {
+                    await fetch(`/api/objectives/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status: "selected" }),
+                    });
+                    loadClients();
+                  }}
+                />
+              )}
+              {!["upload", "objectives"].includes(stepInfo.current) && (
                 <p className="text-sm text-white/50">Step content coming soon...</p>
               )}
             </div>
