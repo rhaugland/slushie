@@ -6,8 +6,16 @@ import { ClientHeader } from "@/components/client-header";
 import { ProgressStepper, StepKey } from "@/components/progress-stepper";
 import { StepUpload } from "@/components/step-upload";
 import { StepObjectives } from "@/components/step-objectives";
+import { StepArchitect } from "@/components/step-architect";
 
-type Build = { id: string; deployUrl: string | null; deployStatus: string };
+type ArchitectPlan = {
+  summary: string;
+  features: string[];
+  techStack: { framework: string; styling: string; other: string[] };
+  fileStructure: string[];
+  implementationSteps: string[];
+};
+type Build = { id: string; deployUrl: string | null; deployStatus: string; architectPlan: ArchitectPlan };
 type Objective = { id: string; title: string; description: string; priority: string | null; status: string; builds: Build[] };
 type Meeting = { id: string; status: string; createdAt: string; transcript?: string | null; objectives: Objective[] };
 type Client = {
@@ -125,7 +133,25 @@ export default function Home() {
                   }}
                 />
               )}
-              {!["upload", "objectives"].includes(stepInfo.current) && (
+              {stepInfo.current === "architect" && (() => {
+                const activeObj = selected.meetings
+                  .flatMap((m) => m.objectives)
+                  .find((o) => ["selected", "architecting"].includes(o.status) || o.builds.length > 0);
+                if (!activeObj) return <p className="text-sm text-white/50">Select an objective first.</p>;
+                const latestBuild = activeObj.builds[activeObj.builds.length - 1] || null;
+                return (
+                  <StepArchitect
+                    objectiveTitle={activeObj.title}
+                    objectiveStatus={activeObj.status}
+                    build={latestBuild}
+                    onApprove={async (buildId) => {
+                      await fetch(`/api/builds/${buildId}/approve`, { method: "POST" });
+                      loadClients();
+                    }}
+                  />
+                );
+              })()}
+              {!["upload", "objectives", "architect"].includes(stepInfo.current) && (
                 <p className="text-sm text-white/50">Step content coming soon...</p>
               )}
             </div>
