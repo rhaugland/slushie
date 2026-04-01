@@ -1,252 +1,157 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Sidebar } from "@/components/sidebar";
-import { ClientHeader } from "@/components/client-header";
-import { ProgressStepper, StepKey } from "@/components/progress-stepper";
-import { StepUpload } from "@/components/step-upload";
-import { StepObjectives } from "@/components/step-objectives";
-import { StepArchitect } from "@/components/step-architect";
-import { StepBuild } from "@/components/step-build";
-import { StepDeploy } from "@/components/step-deploy";
+import { ProjectSidebar } from "@/components/project-sidebar";
+import { ProjectTree } from "@/components/project-tree";
+import { ContextPane } from "@/components/context-pane";
 
-type ArchitectPlan = {
-  summary: string;
-  features: string[];
-  techStack: { framework: string; styling: string; other: string[] };
-  fileStructure: string[];
-  implementationSteps: string[];
-};
-type Build = { id: string; deployUrl: string | null; deployStatus: string; architectPlan: ArchitectPlan; logs: string | null };
-type Objective = { id: string; title: string; description: string; priority: string | null; status: string; builds: Build[] };
-type Meeting = { id: string; status: string; createdAt: string; transcript?: string | null; objectives: Objective[] };
-type Client = {
-  id: string;
-  name: string;
-  firm: string;
-  meetings: Meeting[];
-};
-
-function deriveStep(client: Client): { current: StepKey; completed: StepKey[] } {
-  const meetings = client.meetings;
-  if (meetings.length === 0) return { current: "upload", completed: [] };
-
-  const latestMeeting = meetings[0];
-  const objectives = latestMeeting.objectives;
-  const completed: StepKey[] = ["upload"];
-
-  if (latestMeeting.status !== "ready" && objectives.length === 0) {
-    return { current: "objectives", completed };
-  }
-
-  if (objectives.length > 0) completed.push("objectives");
-
-  const activeObj = objectives.find((o) =>
-    ["selected", "architecting", "building", "deployed"].includes(o.status)
-  );
-
-  if (!activeObj) return { current: "architect", completed };
-
-  if (activeObj.status === "architecting" || activeObj.status === "selected") {
-    return { current: "architect", completed };
-  }
-
-  completed.push("architect");
-
-  if (activeObj.status === "building") {
-    return { current: "build", completed };
-  }
-
-  if (activeObj.builds.some((b) => b.deployStatus === "live")) {
-    completed.push("build", "deploy");
-    return { current: "deploy", completed };
-  }
-
-  if (activeObj.builds.some((b) => b.deployStatus === "deploying")) {
-    completed.push("build");
-    return { current: "deploy", completed };
-  }
-
-  return { current: "build", completed };
-}
+type Selection =
+  | { type: "project" }
+  | { type: "feature"; id: string }
+  | { type: "meeting"; id: string };
 
 export default function Home() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>({ type: "project" });
+  const [project, setProject] = useState<any>(null);
 
-  const loadClients = useCallback(async () => {
-    const res = await fetch("/api/clients");
+  const loadProjects = useCallback(async () => {
+    const res = await fetch("/api/projects");
     const data = await res.json();
-    setClients(data);
+    setProjects(data);
+  }, []);
+
+  const loadProject = useCallback(async (id: string) => {
+    const res = await fetch(`/api/projects/${id}`);
+    const data = await res.json();
+    setProject(data);
   }, []);
 
   useEffect(() => {
-    loadClients();
-  }, [loadClients]);
+    loadProjects();
+  }, [loadProjects]);
 
   useEffect(() => {
-    const selected = clients.find((c) => c.id === selectedId) || null;
-    if (!selected) return;
+    if (selectedProjectId) {
+      loadProject(selectedProjectId);
+    } else {
+      setProject(null);
+    }
+  }, [selectedProjectId, loadProject]);
 
-    const hasActiveJob = selected.meetings.some(
-      (m) => ["transcribing", "extracting"].includes(m.status)
-    ) || selected.meetings.some((m) =>
-      m.objectives.some((o) =>
-        ["selected", "architecting", "building"].includes(o.status) ||
-        o.builds.some((b) => ["building", "deploying"].includes(b.deployStatus))
-      )
-    );
+  useEffect(() => {
+    if (!project) return;
 
-    if (!hasActiveJob) return;
+    const allFeatures = [
+      ...project.features,
+      ...project.features.flatMap((f: any) => f.children || []),
+    ];
+    const hasActiveWork =
+      allFeatures.some((f: any) => f.status === "building") ||
+      project.meetings.some((m: any) =>
+        ["transcribing", "extracting"].includes(m.status)
+      ) ||
+      project.deployStatus === "starting";
 
-    const interval = setInterval(loadClients, 2000);
+    if (!hasActiveWork) return;
+
+    const interval = setInterval(() => loadProject(project.id), 2000);
     return () => clearInterval(interval);
-  }, [selectedId, clients, loadClients]);
+  }, [project, loadProject]);
 
-  const selected = clients.find((c) => c.id === selectedId) || null;
+  async function handleToggle(featureId: string, enabled: boolean) {
+    await fetch(`/api/features/${featureId}/toggle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    if (selectedProjectId) loadProject(selectedProjectId);
+  }
 
-  const allObjectives = selected?.meetings.flatMap((m) => m.objectives) || [];
-  const deployedCount = allObjectives.flatMap((o) => o.builds).filter((b) => b.deployUrl).length;
+  async function handleAddFeature(parentId: string | null) {
+    const title = prompt("Feature name:");
+    if (!title) return;
+    const description = prompt("Short description:") || title;
 
-  const stepInfo = selected ? deriveStep(selected) : null;
+    await fetch(`/api/projects/${selectedProjectId}/features`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, description, parentId }),
+    });
+    if (selectedProjectId) loadProject(selectedProjectId);
+  }
+
+  async function handleUploadMeeting() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "audio/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const { url } = await uploadRes.json();
+
+      await fetch(`/api/projects/${selectedProjectId}/meetings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audioUrl: url }),
+      });
+
+      if (selectedProjectId) loadProject(selectedProjectId);
+    };
+    input.click();
+  }
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar
-        clients={clients}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onClientCreated={loadClients}
+      <ProjectSidebar
+        projects={projects}
+        selectedId={selectedProjectId}
+        onSelect={(id) => {
+          setSelectedProjectId(id);
+          setSelection({ type: "project" });
+        }}
+        onProjectCreated={loadProjects}
       />
-      <main className="flex-1 p-6">
-        {selected && stepInfo ? (
-          <div>
-            <ClientHeader
-              name={selected.name}
-              firm={selected.firm}
-              objectiveCount={allObjectives.length}
-              deployedCount={deployedCount}
+
+      {project ? (
+        <>
+          <ProjectTree
+            project={project}
+            selection={selection}
+            onSelect={setSelection}
+            onToggle={handleToggle}
+            onAddFeature={handleAddFeature}
+          />
+          <main className="flex-1 p-6">
+            <ContextPane
+              project={project}
+              selection={selection}
+              onUpdate={() => {
+                if (selectedProjectId) loadProject(selectedProjectId);
+                loadProjects();
+              }}
             />
-            <ProgressStepper
-              currentStep={stepInfo.current}
-              completedSteps={stepInfo.completed}
-            />
-            <div className="bg-white/[0.03] rounded-xl p-6 border border-white/[0.08]">
-              <div className="text-[0.6rem] uppercase tracking-widest text-blue-500 font-semibold mb-2">
-                Step · {stepInfo.current}
-              </div>
-              {stepInfo.current === "upload" && (
-                <StepUpload clientId={selected.id} onUploadComplete={loadClients} />
-              )}
-              {stepInfo.current === "objectives" && selected.meetings[0] && (
-                <StepObjectives
-                  objectives={selected.meetings[0].objectives}
-                  transcript={selected.meetings[0].transcript ?? null}
-                  meetingStatus={selected.meetings[0].status}
-                  onUpdate={loadClients}
-                  onSelectObjective={async (id) => {
-                    await fetch(`/api/objectives/${id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ status: "selected" }),
-                    });
-                    loadClients();
-                  }}
-                />
-              )}
-              {stepInfo.current === "architect" && (() => {
-                const activeObj = selected.meetings
-                  .flatMap((m) => m.objectives)
-                  .find((o) => ["selected", "architecting"].includes(o.status) || o.builds.length > 0);
-                if (!activeObj) return <p className="text-sm text-white/50">Select an objective first.</p>;
-                const latestBuild = activeObj.builds[activeObj.builds.length - 1] || null;
-                return (
-                  <StepArchitect
-                    objectiveTitle={activeObj.title}
-                    objectiveStatus={activeObj.status}
-                    build={latestBuild}
-                    onApprove={async (buildId) => {
-                      await fetch(`/api/builds/${buildId}/approve`, { method: "POST" });
-                      loadClients();
-                    }}
-                  />
-                );
-              })()}
-              {stepInfo.current === "build" && (() => {
-                const activeObj = selected.meetings
-                  .flatMap((m) => m.objectives)
-                  .find((o) => o.status === "building");
-                if (!activeObj) return null;
-                const latestBuild = activeObj.builds[activeObj.builds.length - 1];
-                if (!latestBuild) return null;
-                return (
-                  <StepBuild
-                    objectiveTitle={activeObj.title}
-                    buildId={latestBuild.id}
-                    deployStatus={latestBuild.deployStatus}
-                    logs={latestBuild.logs ?? null}
-                    onBuildComplete={loadClients}
-                  />
-                );
-              })()}
-              {stepInfo.current === "deploy" && (() => {
-                const allObjs = selected.meetings.flatMap((m) => m.objectives);
-                const deployedObj = allObjs.find((o) => o.status === "deployed" || o.builds.some((b) => b.deployStatus === "deploying"));
-                if (!deployedObj) return null;
-                const latestBuild = deployedObj.builds[deployedObj.builds.length - 1];
-                return (
-                  <StepDeploy
-                    objectiveTitle={deployedObj.title}
-                    deployUrl={latestBuild?.deployUrl ?? null}
-                    deployStatus={latestBuild?.deployStatus ?? "deploying"}
-                    otherObjectives={allObjs.filter((o) => o.id !== deployedObj.id)}
-                    onTackleAnother={async (id) => {
-                      await fetch(`/api/objectives/${id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ status: "selected" }),
-                      });
-                      loadClients();
-                    }}
-                    onUploadNew={loadClients}
-                  />
-                );
-              })()}
+
+            <div className="mt-8 pt-4 border-t border-white/[0.06]">
+              <button
+                onClick={handleUploadMeeting}
+                className="text-xs text-white/30 hover:text-white/50 transition-colors"
+              >
+                + Upload meeting recording
+              </button>
             </div>
-            {/* Other objectives from meetings */}
-            {(() => {
-              const allObjs = selected.meetings.flatMap((m) => m.objectives);
-              if (allObjs.length <= 1) return null;
-              return (
-                <div className="mt-6 pt-4 border-t border-white/[0.06]">
-                  <div className="text-[0.65rem] uppercase tracking-widest text-white/30 mb-2">
-                    All objectives
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {allObjs.map((obj) => (
-                      <div
-                        key={obj.id}
-                        className={`px-3 py-1.5 rounded-md text-[0.7rem] border ${
-                          obj.status === "deployed"
-                            ? "bg-green-500/10 border-green-500/20 text-green-400"
-                            : obj.status === "draft"
-                            ? "bg-white/[0.03] border-white/[0.08] text-white/40"
-                            : "bg-blue-500/10 border-blue-500/20 text-blue-300"
-                        }`}
-                      >
-                        {obj.status === "deployed" && "✓ "}
-                        {obj.title}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        ) : (
-          <p className="text-white/50">Select or create a client to get started.</p>
-        )}
-      </main>
+          </main>
+        </>
+      ) : (
+        <main className="flex-1 p-6 flex items-center justify-center">
+          <p className="text-white/50">Select or create a project to get started.</p>
+        </main>
+      )}
     </div>
   );
 }

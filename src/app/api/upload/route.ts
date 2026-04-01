@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -9,9 +10,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
-  const blob = await put(`meetings/${Date.now()}-${file.name}`, file, {
-    access: "public",
-  });
+  // Save locally in development
+  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  await mkdir(uploadDir, { recursive: true });
+  const filename = `${Date.now()}-${file.name}`;
+  const filepath = path.join(uploadDir, filename);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(filepath, buffer);
 
-  return NextResponse.json({ url: blob.url });
+  const url = `/uploads/${filename}`;
+  return NextResponse.json({ url });
 }
