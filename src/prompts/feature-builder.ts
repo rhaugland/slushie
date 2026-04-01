@@ -4,6 +4,7 @@ export function featureBuilderPrompt(context: {
   existingTables: string;
   siblingFeatures: { title: string; tables: string }[];
   themeVars: string;
+  minorFeatures?: { title: string; description: string }[];
 }): { system: string; user: string } {
   const siblingContext = context.siblingFeatures.length > 0
     ? `\nOther enabled features (for shared DB context, do NOT import their code):\n${context.siblingFeatures
@@ -40,7 +41,11 @@ Respond with ONLY valid JSON (no markdown, no explanation):
 
     user: `Feature: ${context.title}
 Description: ${context.description}
-
+${context.minorFeatures && context.minorFeatures.length > 0
+  ? `\nThis feature MUST include the following sub-features (build these into the module):\n${context.minorFeatures
+      .map((f, i) => `${i + 1}. ${f.title}: ${f.description}`)
+      .join("\n")}\n`
+  : ""}
 Current database schema:
 ${context.existingTables || "No tables yet."}
 ${siblingContext}

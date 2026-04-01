@@ -13,44 +13,93 @@ type Project = {
   features: { id: string; status: string }[];
 };
 
-type Props = {
-  projects: Project[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onProjectCreated: () => void;
-};
+function ProjectItem({
+  project,
+  isSelected,
+  onSelect,
+  onDelete,
+}: {
+  project: Project;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const liveCount = project.features.filter((f) => f.status === "live").length;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreated }: Props) {
-  const [showForm, setShowForm] = useState(false);
-
-  const w3 = projects.filter((p) => p.clientFirm === "w3");
-  const iso = projects.filter((p) => p.clientFirm === "isotropic");
-
-  function ProjectItem({ project }: { project: Project }) {
-    const liveCount = project.features.filter((f) => f.status === "live").length;
-    const isSelected = project.id === selectedId;
-
+  if (confirmDelete) {
     return (
-      <button
-        onClick={() => onSelect(project.id)}
-        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-          isSelected
-            ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
-            : "text-white/60 hover:text-white hover:bg-white/[0.05]"
-        }`}
-      >
-        <div className="flex justify-between items-center">
-          <span className="truncate">{project.name}</span>
+      <div className="px-3 py-2 rounded-lg text-sm bg-red-500/10 border border-red-500/20">
+        <p className="text-[0.65rem] text-red-400 mb-2">Delete {project.name}?</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onDelete}
+            className="text-[0.6rem] px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => setConfirmDelete(false)}
+            className="text-[0.6rem] px-2 py-1 rounded bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer group ${
+        isSelected
+          ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
+          : "text-white/60 hover:text-white hover:bg-white/[0.05] border border-transparent"
+      }`}
+    >
+      <div className="flex justify-between items-center">
+        <span className="truncate">{project.name}</span>
+        <div className="flex items-center gap-1.5">
           {liveCount > 0 && (
             <span className="text-[0.6rem] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">
               {liveCount} live
             </span>
           )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmDelete(true);
+            }}
+            className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 transition-all p-0.5"
+            title="Delete project"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
         </div>
-        <div className="text-[0.6rem] text-white/30 mt-0.5">{project.clientName}</div>
-      </button>
-    );
-  }
+      </div>
+      <div className="text-[0.6rem] text-white/30 mt-0.5">{project.clientName}</div>
+    </div>
+  );
+}
+
+type Props = {
+  projects: Project[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onProjectCreated: () => void;
+  onDeleteProject: (id: string) => void;
+  onCollapse: () => void;
+};
+
+export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreated, onDeleteProject, onCollapse }: Props) {
+  const [showForm, setShowForm] = useState(false);
+
+  const w3 = projects.filter((p) => p.clientFirm === "w3");
+  const iso = projects.filter((p) => p.clientFirm === "isotropic");
 
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
@@ -60,6 +109,15 @@ export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreate
             slushie.machine
           </span>
         </h1>
+        <button
+          onClick={onCollapse}
+          className="text-white/20 hover:text-white/40 transition-colors p-1"
+          title="Collapse sidebar"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
       </div>
 
       <button
@@ -84,7 +142,15 @@ export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreate
           <div>
             <div className="text-[0.6rem] uppercase tracking-widest text-red-400/60 mb-2">w3</div>
             <div className="space-y-1">
-              {w3.map((p) => <ProjectItem key={p.id} project={p} />)}
+              {w3.map((p) => (
+                <ProjectItem
+                  key={p.id}
+                  project={p}
+                  isSelected={p.id === selectedId}
+                  onSelect={() => onSelect(p.id)}
+                  onDelete={() => onDeleteProject(p.id)}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -92,7 +158,15 @@ export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreate
           <div>
             <div className="text-[0.6rem] uppercase tracking-widest text-blue-400/60 mb-2">isotropic</div>
             <div className="space-y-1">
-              {iso.map((p) => <ProjectItem key={p.id} project={p} />)}
+              {iso.map((p) => (
+                <ProjectItem
+                  key={p.id}
+                  project={p}
+                  isSelected={p.id === selectedId}
+                  onSelect={() => onSelect(p.id)}
+                  onDelete={() => onDeleteProject(p.id)}
+                />
+              ))}
             </div>
           </div>
         )}

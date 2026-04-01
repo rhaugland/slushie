@@ -12,6 +12,13 @@ export async function POST(
     include: { project: true },
   });
 
+  if (feature.parentId) {
+    return NextResponse.json(
+      { error: "Minor features are build instructions — build the parent feature instead" },
+      { status: 400 }
+    );
+  }
+
   if (feature.status === "building") {
     return NextResponse.json({ error: "Already building" }, { status: 409 });
   }

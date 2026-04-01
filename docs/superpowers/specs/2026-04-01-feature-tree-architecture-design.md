@@ -64,14 +64,16 @@ Declares what features exist, their hierarchy, and their enabled state. The base
 }
 ```
 
-### 3. Feature Modules
+### 3. Feature Modules (Major Features Only)
 
-Each feature is a self-contained directory under `/features/{featureId}/` conforming to a standard contract:
+Each **major feature** (parentId = null) is a self-contained directory under `/features/{featureId}/` conforming to a standard contract:
 
 - `page.tsx` — main route component
 - `schema.sql` — database tables this feature needs (run on enable)
 - `nav.json` — icon and label for sidebar
 - Optional: sub-routes, API routes, components (all self-contained within the directory)
+
+**Minor features are build instructions, not code modules.** They are descriptions (e.g., "Add CSV import button", "Include a tagging field") that get included in the AI prompt when building the parent major feature. Toggling a minor feature changes what gets baked into the next build — it does not modify the manifest or mount/unmount any code. Minor features never appear in `features.json`.
 
 **Isolation rules:**
 - Features never import from each other's code

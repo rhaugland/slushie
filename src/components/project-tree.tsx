@@ -40,9 +40,10 @@ type Props = {
   onSelect: (sel: Selection) => void;
   onToggle: (featureId: string, enabled: boolean) => void;
   onAddFeature: (parentId: string | null) => void;
+  onCollapse: () => void;
 };
 
-export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeature }: Props) {
+export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeature, onCollapse }: Props) {
   const [meetingsOpen, setMeetingsOpen] = useState(false);
 
   const pendingSuggestions = project.meetings.reduce(
@@ -52,6 +53,19 @@ export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeatu
 
   return (
     <div className="w-72 border-r border-white/[0.06] bg-[#0c1120] p-3 min-h-screen flex flex-col overflow-y-auto">
+      {/* Collapse button */}
+      <div className="flex justify-end mb-1">
+        <button
+          onClick={onCollapse}
+          className="text-white/20 hover:text-white/40 transition-colors p-1"
+          title="Collapse feature tree"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      </div>
+
       {/* Project header */}
       <button
         onClick={() => onSelect({ type: "project" })}

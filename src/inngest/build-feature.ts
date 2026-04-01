@@ -53,9 +53,19 @@ export const buildFeature = inngest.createFunction(
         where: {
           projectId,
           id: { not: featureId },
+          parentId: null,
           status: "live",
           enabled: true,
         },
+      });
+
+      // Gather enabled minor features (build instructions) for this major feature
+      const minorFeatures = await prisma.feature.findMany({
+        where: {
+          parentId: featureId,
+          enabled: true,
+        },
+        orderBy: { sortOrder: "asc" },
       });
 
       const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
@@ -77,6 +87,10 @@ export const buildFeature = inngest.createFunction(
         siblingFeatures: siblings.map((s) => ({ title: s.title, tables: "" })),
         themeVars: "",
         parentId: feature.parentId,
+        minorFeatures: minorFeatures.map((f) => ({
+          title: f.title,
+          description: f.description,
+        })),
       };
     });
 
@@ -89,6 +103,7 @@ export const buildFeature = inngest.createFunction(
         existingTables: context.existingTables,
         siblingFeatures: context.siblingFeatures,
         themeVars: context.themeVars,
+        minorFeatures: context.minorFeatures,
       });
 
       const raw = await callClaude({
@@ -143,19 +158,14 @@ export const buildFeature = inngest.createFunction(
     await step.run("update-manifest", async () => {
       await updateLogs(4);
 
-      const parentFeature = context.parentId
-        ? await prisma.feature.findUnique({ where: { id: context.parentId } })
-        : null;
-      const routeBase = parentFeature
-        ? `/features/${context.parentId}/${featureId}`
-        : `/features/${featureId}`;
+      // Only major features (parentId === null) get built and added to manifest
+      const routeBase = `/features/${featureId}`;
 
       const manifest = await readManifest(context.projectDir);
       const updated = addFeatureToManifest(manifest, {
         id: featureId,
         title: context.title,
         route: routeBase,
-        parentId: context.parentId,
       });
       await writeManifest(context.projectDir, updated);
 

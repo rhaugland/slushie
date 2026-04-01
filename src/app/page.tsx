@@ -15,6 +15,8 @@ export default function Home() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>({ type: "project" });
   const [project, setProject] = useState<any>(null);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [middleCollapsed, setMiddleCollapsed] = useState(false);
 
   const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects");
@@ -82,52 +84,70 @@ export default function Home() {
     if (selectedProjectId) loadProject(selectedProjectId);
   }
 
-  async function handleUploadMeeting() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "audio/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      const { url } = await uploadRes.json();
-
-      await fetch(`/api/projects/${selectedProjectId}/meetings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audioUrl: url }),
-      });
-
-      if (selectedProjectId) loadProject(selectedProjectId);
-    };
-    input.click();
-  }
-
   return (
     <div className="flex min-h-screen">
-      <ProjectSidebar
-        projects={projects}
-        selectedId={selectedProjectId}
-        onSelect={(id) => {
-          setSelectedProjectId(id);
-          setSelection({ type: "project" });
-        }}
-        onProjectCreated={loadProjects}
-      />
+      {/* Left sidebar — project list */}
+      {leftCollapsed ? (
+        <div className="w-10 border-r border-white/[0.06] bg-[#0a0f1a] flex flex-col items-center pt-3">
+          <button
+            onClick={() => setLeftCollapsed(false)}
+            className="text-white/20 hover:text-white/50 transition-colors p-1"
+            title="Expand projects"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <ProjectSidebar
+          projects={projects}
+          selectedId={selectedProjectId}
+          onSelect={(id) => {
+            setSelectedProjectId(id);
+            setSelection({ type: "project" });
+          }}
+          onProjectCreated={loadProjects}
+          onDeleteProject={async (id) => {
+            await fetch(`/api/projects/${id}`, { method: "DELETE" });
+            if (selectedProjectId === id) {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "project" });
+            }
+            loadProjects();
+          }}
+          onCollapse={() => setLeftCollapsed(true)}
+        />
+      )}
 
       {project ? (
         <>
-          <ProjectTree
-            project={project}
-            selection={selection}
-            onSelect={setSelection}
-            onToggle={handleToggle}
-            onAddFeature={handleAddFeature}
-          />
-          <main className="flex-1 p-6">
+          {/* Middle panel — feature tree */}
+          {middleCollapsed ? (
+            <div className="w-10 border-r border-white/[0.06] bg-[#0c1120] flex flex-col items-center pt-3">
+              <button
+                onClick={() => setMiddleCollapsed(false)}
+                className="text-white/20 hover:text-white/50 transition-colors p-1"
+                title="Expand feature tree"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <ProjectTree
+              project={project}
+              selection={selection}
+              onSelect={setSelection}
+              onToggle={handleToggle}
+              onAddFeature={handleAddFeature}
+              onCollapse={() => setMiddleCollapsed(true)}
+            />
+          )}
+
+          <main className="flex-1 p-6 overflow-y-auto">
             <ContextPane
               project={project}
               selection={selection}
@@ -136,15 +156,6 @@ export default function Home() {
                 loadProjects();
               }}
             />
-
-            <div className="mt-8 pt-4 border-t border-white/[0.06]">
-              <button
-                onClick={handleUploadMeeting}
-                className="text-xs text-white/30 hover:text-white/50 transition-colors"
-              >
-                + Upload meeting recording
-              </button>
-            </div>
           </main>
         </>
       ) : (

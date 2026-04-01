@@ -61,6 +61,7 @@ export function TreeNode({ feature, depth, selectedId, onSelect, onToggle }: Pro
         <span className={`flex-1 text-xs truncate ${
           feature.enabled ? "text-white/80" : "text-white/30 line-through"
         }`}>
+          {feature.parentId && <span className="text-white/20 mr-1">↳</span>}
           {feature.title}
         </span>
 

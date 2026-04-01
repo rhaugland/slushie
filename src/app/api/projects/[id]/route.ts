@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { rm } from "fs/promises";
+import path from "path";
+
+const execAsync = promisify(exec);
 
 export async function GET(
   _req: NextRequest,
@@ -52,6 +58,28 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Kill the dev server if running
+  if (project.port) {
+    try {
+      await execAsync(`lsof -ti:${project.port} | xargs kill -9 2>/dev/null || true`);
+    } catch { /* already stopped */ }
+  }
+
+  // Remove preview directory
+  const slug = project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  const projectDir = path.join(process.cwd(), "previews", slug);
+  try {
+    await rm(projectDir, { recursive: true, force: true });
+  } catch { /* may not exist */ }
+
+  // Cascade delete handles features, builds, meetings, suggestions
   await prisma.project.delete({ where: { id } });
+
   return NextResponse.json({ ok: true });
 }

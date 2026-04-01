@@ -34,8 +34,18 @@ export async function writeManifest(
 
 export function addFeatureToManifest(
   manifest: Manifest,
-  feature: { id: string; title: string; route: string; parentId: string | null }
+  feature: { id: string; title: string; route: string }
 ): Manifest {
+  // Only major features go into the manifest. Minor features are build instructions.
+  const existing = manifest.features.find((f) => f.id === feature.id);
+  if (existing) {
+    return {
+      features: manifest.features.map((f) =>
+        f.id === feature.id ? { ...f, title: feature.title, route: feature.route, enabled: true } : f
+      ),
+    };
+  }
+
   const node: ManifestFeature = {
     id: feature.id,
     title: feature.title,
@@ -45,17 +55,7 @@ export function addFeatureToManifest(
     children: [],
   };
 
-  if (!feature.parentId) {
-    return { features: [...manifest.features, node] };
-  }
-
-  return {
-    features: manifest.features.map((f) =>
-      f.id === feature.parentId
-        ? { ...f, children: [...f.children, node] }
-        : f
-    ),
-  };
+  return { features: [...manifest.features, node] };
 }
 
 export function toggleFeatureInManifest(
