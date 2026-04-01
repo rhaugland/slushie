@@ -1,10 +1,10 @@
 import { inngest } from "./client";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@deepgram/sdk";
+import { DeepgramClient } from "@deepgram/sdk";
 import { readFile } from "fs/promises";
 import path from "path";
 
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
+const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY! as any);
 
 export const transcribe = inngest.createFunction(
   {
