@@ -1,32 +1,25 @@
 import { z } from "zod";
 
-export const objectiveSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-  priority: z.enum(["high", "medium", "low"]),
-});
-
-export const objectivesResponseSchema = z.object({
-  objectives: z.array(objectiveSchema).min(1),
-});
-
-export const architectPlanSchema = z.object({
-  summary: z.string().min(1),
-  features: z.array(z.string()),
-  techStack: z.object({
-    framework: z.string(),
-    styling: z.string(),
-    other: z.array(z.string()),
-  }),
-  fileStructure: z.array(z.string()),
-  implementationSteps: z.array(z.string()),
-});
-
-export const buildOutputSchema = z.object({
+export const featureModuleSchema = z.object({
   files: z.array(
     z.object({
-      path: z.string().min(1),
-      content: z.string().min(1),
+      path: z.string(),
+      content: z.string(),
     })
   ),
 });
+
+export const meetingSuggestionsSchema = z.object({
+  suggestions: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      priority: z.enum(["high", "medium", "low"]),
+      isMajor: z.boolean(),
+      suggestedParent: z.string().nullable(),
+    })
+  ),
+});
+
+export type FeatureModuleOutput = z.infer<typeof featureModuleSchema>;
+export type MeetingSuggestionsOutput = z.infer<typeof meetingSuggestionsSchema>;
