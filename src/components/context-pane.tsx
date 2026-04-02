@@ -27,7 +27,21 @@ export function ContextPane({ project, selection, onUpdate }: Props) {
     ];
     const feature = allFeatures.find((f: any) => f.id === selection.id);
     if (!feature) return <p className="text-white/30 text-sm">Feature not found.</p>;
-    return <PaneFeature feature={feature} projectId={project.id} onUpdate={onUpdate} />;
+
+    // For minor features, find the parent to derive the preview route
+    const parentFeature = feature.parentId
+      ? project.features.find((f: any) => f.id === feature.parentId)
+      : null;
+
+    return (
+      <PaneFeature
+        feature={feature}
+        projectId={project.id}
+        deployUrl={project.deployUrl || null}
+        parentTitle={parentFeature?.title || null}
+        onUpdate={onUpdate}
+      />
+    );
   }
 
   if (selection.type === "meeting") {

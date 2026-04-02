@@ -14,8 +14,14 @@ type Props = {
     builds: { id: string; status: string; buildLogs: string | null; createdAt: string }[];
   };
   projectId: string;
+  deployUrl: string | null;
+  parentTitle: string | null;
   onUpdate: () => void;
 };
+
+function deriveRoute(title: string): string {
+  return "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   draft: { text: "Ready to build", color: "text-white/40 bg-white/[0.06]" },
@@ -24,7 +30,7 @@ const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   error: { text: "Error", color: "text-red-400 bg-red-500/10" },
 };
 
-export function PaneFeature({ feature, projectId, onUpdate }: Props) {
+export function PaneFeature({ feature, projectId, deployUrl, parentTitle, onUpdate }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(feature.title);
   const [description, setDescription] = useState(feature.description);
@@ -131,6 +137,32 @@ export function PaneFeature({ feature, projectId, onUpdate }: Props) {
             Delete
           </button>
         </div>
+
+        {deployUrl && parentTitle && (
+          <div className="mt-6 border-t border-white/[0.06] pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[0.6rem] uppercase tracking-widest text-white/30">
+                Preview — {parentTitle}
+              </div>
+              <a
+                href={`${deployUrl}${deriveRoute(parentTitle)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[0.6rem] text-blue-400 hover:text-blue-300"
+              >
+                Open in new tab
+              </a>
+            </div>
+            <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
+              <iframe
+                src={`${deployUrl}${deriveRoute(parentTitle)}`}
+                className="w-full border-0"
+                style={{ height: "500px" }}
+                title={`Preview of ${parentTitle}`}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -248,6 +280,32 @@ export function PaneFeature({ feature, projectId, onUpdate }: Props) {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {deployUrl && (
+        <div className="mt-6 border-t border-white/[0.06] pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[0.6rem] uppercase tracking-widest text-white/30">
+              Preview — {feature.title}
+            </div>
+            <a
+              href={`${deployUrl}${deriveRoute(feature.title)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[0.6rem] text-blue-400 hover:text-blue-300"
+            >
+              Open in new tab
+            </a>
+          </div>
+          <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
+            <iframe
+              src={`${deployUrl}${deriveRoute(feature.title)}`}
+              className="w-full border-0"
+              style={{ height: "500px" }}
+              title={`Preview of ${feature.title}`}
+            />
           </div>
         </div>
       )}

@@ -29,7 +29,7 @@ const STATUS_DOT: Record<string, string> = {
 
 export function TreeNode({ feature, depth, selectedId, onSelect, onToggle }: Props) {
   const [collapsed, setCollapsed] = useState(false);
-  const hasChildren = feature.children.length > 0;
+  const hasChildren = (feature.children ?? []).length > 0;
   const isSelected = feature.id === selectedId;
 
   return (
