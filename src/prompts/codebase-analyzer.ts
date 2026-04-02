@@ -18,6 +18,7 @@ Rules:
 - Be specific about minor features — "Add contact form with name, email, phone fields" not just "form"
 - Include the file paths from the codebase that belong to each section
 - For routes: use the actual URL path from the router (e.g., "/contacts", "/dashboard"). For file-based routing (Next.js), derive from the file path. For base, use "/" as the route.
+- For minor features: include a "route" field if the minor feature has its own distinct page/URL (e.g., a "Forgot password form" at "/forgot-password"). If the minor feature is a component within the parent's page (e.g., a search bar on the contacts page), use the parent's route.
 
 Respond with ONLY valid JSON (no markdown, no explanation):
 {
@@ -39,9 +40,9 @@ Respond with ONLY valid JSON (no markdown, no explanation):
       "route": "/contacts",
       "files": ["src/pages/contacts.tsx", "src/components/ContactList.tsx"],
       "minorFeatures": [
-        {"title": "Contact search bar", "description": "Real-time search/filter across name, email, phone fields"},
-        {"title": "Add contact form", "description": "Modal form with name, email, phone, company, and notes fields"},
-        {"title": "CSV import button", "description": "Upload CSV file to bulk-import contacts"}
+        {"title": "Contact search bar", "description": "Real-time search/filter across name, email, phone fields", "route": "/contacts"},
+        {"title": "Add contact form", "description": "Modal form with name, email, phone, company, and notes fields", "route": "/contacts"},
+        {"title": "CSV import button", "description": "Upload CSV file to bulk-import contacts", "route": "/contacts/import"}
       ]
     }
   ]

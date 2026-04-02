@@ -146,14 +146,14 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
           </button>
         </div>
 
-        {deployUrl && parentTitle && (
+        {deployUrl && (feature.route || parentRoute || parentTitle) && (
           <div className="mt-6 border-t border-white/[0.06] pt-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[0.6rem] uppercase tracking-widest text-white/30">
-                Preview — {parentTitle}
+                Preview — {feature.title}
               </div>
               <a
-                href={previewUrl(projectId, parentRoute || deriveRoute(parentTitle))}
+                href={previewUrl(projectId, feature.route || parentRoute || deriveRoute(parentTitle || feature.title))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[0.6rem] text-blue-400 hover:text-blue-300"
@@ -163,10 +163,10 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             </div>
             <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
               <iframe
-                src={previewUrl(projectId, parentRoute || deriveRoute(parentTitle))}
+                src={previewUrl(projectId, feature.route || parentRoute || deriveRoute(parentTitle || feature.title))}
                 className="w-full border-0"
                 style={{ height: "500px" }}
-                title={`Preview of ${parentTitle}`}
+                title={`Preview of ${feature.title}`}
               />
             </div>
           </div>

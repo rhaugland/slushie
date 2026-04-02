@@ -7,7 +7,7 @@ type MappedSection = {
   description: string;
   category: "base" | "feature";
   route?: string;
-  minorFeatures: { title: string; description: string }[];
+  minorFeatures: { title: string; description: string; route?: string }[];
 };
 
 export async function POST(
@@ -48,6 +48,7 @@ export async function POST(
           parentId: feature.id,
           title: minor.title,
           description: minor.description,
+          route: minor.route || null,
           sortOrder: j,
           enabled: true,
         },
