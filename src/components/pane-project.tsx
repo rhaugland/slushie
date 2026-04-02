@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, DragEvent } from "react";
+import { CodebaseMapper } from "./codebase-mapper";
 
 type Props = {
   project: {
@@ -20,6 +21,9 @@ export function PaneProject({ project, onUpdate }: Props) {
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [dragTarget, setDragTarget] = useState<"meeting" | "codebase" | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [codebaseAnalysis, setCodebaseAnalysis] = useState<any>(null);
+  const [codebaseFileUrl, setCodebaseFileUrl] = useState<string>("");
   const meetingInputRef = useRef<HTMLInputElement>(null);
   const codebaseInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,16 +63,29 @@ export function PaneProject({ project, onUpdate }: Props) {
   }
 
   async function handleCodebaseDrop(files: FileList) {
-    setSubmitting(true);
+    const file = files[0];
+    if (!file) return;
+
+    setAnalyzing(true);
     try {
-      for (const file of Array.from(files)) {
-        const url = await uploadFile(file);
-        // TODO: trigger codebase analysis pipeline
-        console.log("Codebase uploaded:", url);
+      const url = await uploadFile(file);
+      setCodebaseFileUrl(url);
+      const res = await fetch(`/api/projects/${project.id}/analyze-codebase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileUrl: url }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Analysis failed");
+        return;
       }
-      onUpdate();
+
+      const analysis = await res.json();
+      setCodebaseAnalysis(analysis);
     } finally {
-      setSubmitting(false);
+      setAnalyzing(false);
     }
   }
 
@@ -108,6 +125,37 @@ export function PaneProject({ project, onUpdate }: Props) {
     if (e.dataTransfer.files.length > 0) {
       handler(e.dataTransfer.files);
     }
+  }
+
+  // Show codebase mapper if we have analysis results
+  if (codebaseAnalysis) {
+    return (
+      <CodebaseMapper
+        sections={codebaseAnalysis.sections}
+        projectId={project.id}
+        fileUrl={codebaseFileUrl}
+        onComplete={() => {
+          setCodebaseAnalysis(null);
+          setCodebaseFileUrl("");
+          onUpdate();
+        }}
+        onCancel={() => {
+          setCodebaseAnalysis(null);
+          setCodebaseFileUrl("");
+        }}
+      />
+    );
+  }
+
+  // Show analyzing state
+  if (analyzing) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-white/10 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <p className="text-sm text-white/50">Analyzing codebase...</p>
+        <p className="text-[0.65rem] text-white/25 mt-1">Reading files and identifying features</p>
+      </div>
+    );
   }
 
   return (
@@ -156,79 +204,10 @@ export function PaneProject({ project, onUpdate }: Props) {
           Add Context
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          {/* Meeting Notes / Audio */}
-          <div
-            onDragOver={(e) => onDragOver(e, "meeting")}
-            onDragLeave={onDragLeave}
-            onDrop={(e) => onDrop(e, handleMeetingDrop)}
-            onClick={() => meetingInputRef.current?.click()}
-            className={`rounded-lg p-4 border border-dashed cursor-pointer transition-all text-center ${
-              dragTarget === "meeting"
-                ? "border-blue-500/50 bg-blue-500/10"
-                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-            }`}
-          >
-            <input
-              ref={meetingInputRef}
-              type="file"
-              accept="audio/*,.txt,.md,.pdf"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) handleMeetingDrop(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <svg className="w-6 h-6 mx-auto mb-2 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-            <div className="text-xs text-white/50 font-medium mb-0.5">Meeting Notes</div>
-            <div className="text-[0.6rem] text-white/25">
-              Drop audio or notes
-            </div>
-          </div>
-
-          {/* Codebase */}
-          <div
-            onDragOver={(e) => onDragOver(e, "codebase")}
-            onDragLeave={onDragLeave}
-            onDrop={(e) => onDrop(e, handleCodebaseDrop)}
-            onClick={() => codebaseInputRef.current?.click()}
-            className={`rounded-lg p-4 border border-dashed cursor-pointer transition-all text-center ${
-              dragTarget === "codebase"
-                ? "border-blue-500/50 bg-blue-500/10"
-                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-            }`}
-          >
-            <input
-              ref={codebaseInputRef}
-              type="file"
-              accept=".zip,.tar,.tar.gz,.tgz"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) handleCodebaseDrop(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <svg className="w-6 h-6 mx-auto mb-2 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-            <div className="text-xs text-white/50 font-medium mb-0.5">Codebase</div>
-            <div className="text-[0.6rem] text-white/25">
-              Drop a zip or archive
-            </div>
-          </div>
-        </div>
-
         {/* Describe */}
-        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+        <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-4 mb-3">
           <div className="flex items-center gap-2 mb-2">
-            <svg className="w-4 h-4 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="w-5 h-5 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="17" y1="10" x2="3" y2="10" />
               <line x1="21" y1="6" x2="3" y2="6" />
               <line x1="21" y1="14" x2="3" y2="14" />
@@ -254,6 +233,79 @@ export function PaneProject({ project, onUpdate }: Props) {
               </button>
             </div>
           )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Meeting Notes / Audio */}
+          <div
+            onDragOver={(e) => onDragOver(e, "meeting")}
+            onDragLeave={onDragLeave}
+            onDrop={(e) => onDrop(e, handleMeetingDrop)}
+            onClick={() => meetingInputRef.current?.click()}
+            className={`rounded-lg p-4 border border-dashed cursor-pointer transition-all ${
+              dragTarget === "meeting"
+                ? "border-blue-500/50 bg-blue-500/10"
+                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+            }`}
+          >
+            <input
+              ref={meetingInputRef}
+              type="file"
+              accept="audio/*,.txt,.md,.pdf"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) handleMeetingDrop(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-5 h-5 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+              <span className="text-xs text-white/50 font-medium">Meeting Notes</span>
+            </div>
+            <p className="text-[0.65rem] text-white/25 leading-relaxed">
+              Drop audio recordings or meeting notes to extract feature suggestions
+            </p>
+          </div>
+
+          {/* Codebase */}
+          <div
+            onDragOver={(e) => onDragOver(e, "codebase")}
+            onDragLeave={onDragLeave}
+            onDrop={(e) => onDrop(e, handleCodebaseDrop)}
+            onClick={() => codebaseInputRef.current?.click()}
+            className={`rounded-lg p-4 border border-dashed cursor-pointer transition-all ${
+              dragTarget === "codebase"
+                ? "border-blue-500/50 bg-blue-500/10"
+                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+            }`}
+          >
+            <input
+              ref={codebaseInputRef}
+              type="file"
+              accept=".zip,.tar,.tar.gz,.tgz"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) handleCodebaseDrop(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-5 h-5 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              <span className="text-xs text-white/50 font-medium">Codebase</span>
+            </div>
+            <p className="text-[0.65rem] text-white/25 leading-relaxed">
+              Drop a zip or archive of an existing codebase to analyze
+            </p>
+          </div>
         </div>
       </div>
     </div>
