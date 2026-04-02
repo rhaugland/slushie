@@ -25,6 +25,12 @@ function deriveRoute(title: string): string {
   return "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+function previewUrl(projectId: string, route: string): string {
+  // Proxy through our API to avoid mixed-content / localhost blocking
+  const cleanRoute = route.startsWith("/") ? route.slice(1) : route;
+  return `/api/preview/${cleanRoute}?projectId=${projectId}`;
+}
+
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   draft: { text: "Ready to build", color: "text-white/40 bg-white/[0.06]" },
   building: { text: "Building...", color: "text-yellow-400 bg-yellow-500/10" },
@@ -140,14 +146,14 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
           </button>
         </div>
 
-        {deployUrl && parentTitle && (parentRoute || parentTitle) && (
+        {deployUrl && parentTitle && (
           <div className="mt-6 border-t border-white/[0.06] pt-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[0.6rem] uppercase tracking-widest text-white/30">
                 Preview — {parentTitle}
               </div>
               <a
-                href={`${deployUrl}${parentRoute || deriveRoute(parentTitle)}`}
+                href={previewUrl(projectId, parentRoute || deriveRoute(parentTitle))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[0.6rem] text-blue-400 hover:text-blue-300"
@@ -157,7 +163,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             </div>
             <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
               <iframe
-                src={`${deployUrl}${parentRoute || deriveRoute(parentTitle)}`}
+                src={previewUrl(projectId, parentRoute || deriveRoute(parentTitle))}
                 className="w-full border-0"
                 style={{ height: "500px" }}
                 title={`Preview of ${parentTitle}`}
@@ -293,7 +299,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
               Preview — {feature.title}
             </div>
             <a
-              href={`${deployUrl}${feature.route || deriveRoute(feature.title)}`}
+              href={previewUrl(projectId, feature.route || deriveRoute(feature.title))}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[0.6rem] text-blue-400 hover:text-blue-300"
@@ -303,7 +309,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
           </div>
           <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
             <iframe
-              src={`${deployUrl}${feature.route || deriveRoute(feature.title)}`}
+              src={previewUrl(projectId, feature.route || deriveRoute(feature.title))}
               className="w-full border-0"
               style={{ height: "500px" }}
               title={`Preview of ${feature.title}`}

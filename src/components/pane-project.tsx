@@ -167,7 +167,7 @@ export function PaneProject({ project, onUpdate }: Props) {
 
       {project.deployUrl && (
         <a
-          href={project.deployUrl}
+          href={`/api/preview/?projectId=${project.id}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-2 w-full px-4 py-3 mb-6 rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
