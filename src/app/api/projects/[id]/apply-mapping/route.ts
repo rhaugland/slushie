@@ -34,6 +34,7 @@ export async function POST(
         projectId,
         title: section.name,
         description: section.description,
+        route: section.route || null,
         sortOrder: i,
       },
     });

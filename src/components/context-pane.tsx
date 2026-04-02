@@ -39,6 +39,7 @@ export function ContextPane({ project, selection, onUpdate }: Props) {
         projectId={project.id}
         deployUrl={project.deployUrl || null}
         parentTitle={parentFeature?.title || null}
+        parentRoute={parentFeature?.route || null}
         onUpdate={onUpdate}
       />
     );

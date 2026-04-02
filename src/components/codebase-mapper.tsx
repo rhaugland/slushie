@@ -9,6 +9,7 @@ type Section = {
   name: string;
   description: string;
   category: "base" | "feature";
+  route?: string;
   files: string[];
   minorFeatures: MinorFeature[];
 };

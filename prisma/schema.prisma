@@ -31,6 +31,7 @@ model Feature {
   enabled     Boolean        @default(false)
   sortOrder   Int            @default(0)
   status      String         @default("draft") // draft | building | live | error
+  route       String?
   moduleHash  String?
   createdAt   DateTime       @default(now())
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)

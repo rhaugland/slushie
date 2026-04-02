@@ -79,7 +79,7 @@ export const deployCodebase = inngest.createFunction(
         features.map((f) => ({
           id: f.id,
           title: f.title,
-          route: "/" + f.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          route: f.route || "/" + f.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
           enabled: f.enabled,
         })),
         fw
