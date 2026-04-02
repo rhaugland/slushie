@@ -83,7 +83,7 @@ export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeatu
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-[0.6rem] text-blue-400 hover:text-blue-300"
+              className="text-[0.65rem] font-medium text-blue-400 hover:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded-md transition-colors"
             >
               Preview
             </a>

@@ -165,6 +165,22 @@ export function PaneProject({ project, onUpdate }: Props) {
         {project.clientName} · {project.clientFirm}
       </p>
 
+      {project.deployUrl && (
+        <a
+          href={project.deployUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full px-4 py-3 mb-6 rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+        >
+          <span>Open Preview</span>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      )}
+
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="bg-white/[0.03] rounded-lg p-3 border border-white/[0.08]">
           <div className="text-lg font-semibold text-white/80">{totalFeatures}</div>
@@ -183,20 +199,6 @@ export function PaneProject({ project, onUpdate }: Props) {
           <div className="text-[0.6rem] text-white/30 uppercase tracking-wider">Server</div>
         </div>
       </div>
-
-      {project.deployUrl && (
-        <div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.08] mb-6">
-          <div className="text-[0.6rem] text-white/30 uppercase tracking-wider mb-2">Preview URL</div>
-          <a
-            href={project.deployUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-400 hover:text-blue-300 underline break-all"
-          >
-            {project.deployUrl}
-          </a>
-        </div>
-      )}
 
       {/* Input Methods */}
       <div className="border-t border-white/[0.06] pt-5">
