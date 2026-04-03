@@ -27,10 +27,20 @@ async function main() {
   for (const ws of workspaces) {
     await prisma.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: ws.id, userId: user.id } },
-      update: { role: "admin" },
-      create: { workspaceId: ws.id, userId: user.id, role: "admin" },
+      update: { role: "owner" },
+      create: { workspaceId: ws.id, userId: user.id, role: "owner" },
     });
     console.log(`Linked as owner of workspace: ${ws.name}`);
+  }
+
+  const clients = await prisma.client.findMany();
+  for (const client of clients) {
+    await prisma.clientMember.upsert({
+      where: { clientId_userId: { clientId: client.id, userId: user.id } },
+      update: { role: "admin" },
+      create: { clientId: client.id, userId: user.id, role: "admin" },
+    });
+    console.log(`Linked as admin of client: ${client.name}`);
   }
 
   await prisma.$disconnect();
