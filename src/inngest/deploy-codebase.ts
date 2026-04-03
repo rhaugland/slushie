@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { detectFramework } from "@/lib/framework-detect";
 import { injectManifest } from "@/lib/manifest-inject";
 import AdmZip from "adm-zip";
-import { readFile, mkdir, rm } from "fs/promises";
+import { readFile, writeFile, mkdir, rm } from "fs/promises";
 import { readdirSync, statSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -64,6 +64,57 @@ export const deployCodebase = inngest.createFunction(
     const framework = await step.run("detect-framework", async () => {
       const fw = await detectFramework(projectDir);
       return { name: fw.name, startCmd: fw.startCommand(0).replace("0", "__PORT__") };
+    });
+
+    await step.run("patch-for-preview", async () => {
+      // Override prisma with a mock that returns empty data
+      const prismaPath = path.join(projectDir, "src/lib/prisma.ts");
+      try {
+        await readFile(prismaPath);
+        await writeFile(prismaPath, `// Mock Prisma for preview mode
+function createMockModel() {
+  return new Proxy({}, {
+    get(_t, prop) {
+      if (typeof prop === "string") {
+        return async () => {
+          const empty: Record<string, unknown> = {
+            findMany: [], findFirst: null, findUnique: null, count: 0,
+            create: {}, update: {}, upsert: {}, delete: {}, deleteMany: { count: 0 },
+            updateMany: { count: 0 }, aggregate: {}, groupBy: [],
+          };
+          return empty[prop] ?? null;
+        };
+      }
+    },
+  });
+}
+export const prisma = new Proxy({}, {
+  get(_t, prop) {
+    if (prop === "$connect" || prop === "$disconnect") return async () => {};
+    if (prop === "$transaction") return async (fn) => fn(prisma);
+    if (typeof prop === "string" && !prop.startsWith("$")) return createMockModel();
+  },
+}) as any;
+`);
+      } catch { /* no prisma file — skip */ }
+
+      // Override auth to bypass authentication
+      const authPath = path.join(projectDir, "src/lib/auth.ts");
+      try {
+        await readFile(authPath);
+        await writeFile(authPath, `// Preview mode — bypass authentication
+export type SessionType = "user" | "contact";
+export type SessionResult = { type: "user"; user: any } | { type: "contact"; contact: any } | null;
+export async function createSession() { return "preview-token"; }
+export async function getSession() {
+  return { type: "user" as const, user: {
+    id: "preview-user", email: "preview@slushie.dev", name: "Preview User",
+    role: "admin", createdAt: new Date(), updatedAt: new Date(),
+  }};
+}
+export async function destroySession() {}
+`);
+      } catch { /* no auth file — skip */ }
     });
 
     await step.run("inject-manifest", async () => {

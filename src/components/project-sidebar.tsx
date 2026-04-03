@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CreateProjectForm } from "./create-project-form";
+import { EditableText } from "./editable-text";
 
 type Project = {
   id: string;
@@ -28,11 +29,15 @@ function ProjectItem({
   isSelected,
   onSelect,
   onDelete,
+  onSettings,
+  onRename,
 }: {
   project: Project;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onSettings: () => void;
+  onRename: (name: string) => void;
 }) {
   const liveCount = project.features.filter((f) => f.status === "live").length;
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -69,13 +74,31 @@ function ProjectItem({
       }`}
     >
       <div className="flex justify-between items-center">
-        <span className="truncate">{project.name}</span>
+        <EditableText
+          value={project.name}
+          onSave={onRename}
+          className="truncate text-inherit"
+          inputClassName="text-sm text-inherit"
+        />
         <div className="flex items-center gap-1.5">
           {liveCount > 0 && (
             <span className="text-[0.6rem] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">
               {liveCount} live
             </span>
           )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSettings();
+            }}
+            className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-white/40 transition-all p-0.5"
+            title="Project settings"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -105,6 +128,9 @@ type Props = {
   onDeleteProject: (id: string) => void;
   onCollapse: () => void;
   onWorkspaceSettings: (workspaceId: string) => void;
+  onProjectSettings: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => void;
+  onCreateWorkspace: (name: string) => void;
   onLogout: () => void;
 };
 
@@ -117,9 +143,14 @@ export function ProjectSidebar({
   onDeleteProject,
   onCollapse,
   onWorkspaceSettings,
+  onProjectSettings,
+  onRenameProject,
+  onCreateWorkspace,
   onLogout,
 }: Props) {
   const [showForm, setShowForm] = useState(false);
+  const [showWsForm, setShowWsForm] = useState(false);
+  const [wsName, setWsName] = useState("");
 
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
@@ -158,6 +189,49 @@ export function ProjectSidebar({
         />
       )}
 
+      <button
+        onClick={() => setShowWsForm(!showWsForm)}
+        className="w-full mb-4 px-3 py-2 text-xs rounded-lg border border-dashed border-white/10 text-white/40 hover:text-white/60 hover:border-white/20 transition-colors"
+      >
+        + New workspace
+      </button>
+
+      {showWsForm && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!wsName.trim()) return;
+            onCreateWorkspace(wsName.trim());
+            setWsName("");
+            setShowWsForm(false);
+          }}
+          className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] space-y-2"
+        >
+          <input
+            value={wsName}
+            onChange={(e) => setWsName(e.target.value)}
+            placeholder="Workspace name"
+            className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex-1 text-xs py-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+            >
+              Create
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowWsForm(false)}
+              className="text-xs py-1.5 px-3 rounded text-white/30 hover:text-white/50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       <div className="flex-1 overflow-y-auto space-y-4">
         {workspaces.map((membership) => {
           const wsProjects = projects.filter((p) => p.workspaceId === membership.workspace.id);
@@ -186,6 +260,8 @@ export function ProjectSidebar({
                     isSelected={p.id === selectedId}
                     onSelect={() => onSelect(p.id)}
                     onDelete={() => onDeleteProject(p.id)}
+                    onSettings={() => onProjectSettings(p.id)}
+                    onRename={(name) => onRenameProject(p.id, name)}
                   />
                 ))}
                 {wsProjects.length === 0 && (

@@ -23,9 +23,10 @@ type Props = {
   onUpdate: () => void;
   workspaces?: WorkspaceMembership[];
   currentUserId?: string;
+  onOpenPreview?: () => void;
 };
 
-export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId }: Props) {
+export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId, onOpenPreview }: Props) {
   if (selection.type === "workspace-settings") {
     const membership = workspaces?.find((m) => m.workspaceId === selection.workspaceId);
     if (!membership || !currentUserId) return null;
@@ -40,7 +41,7 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
   }
 
   if (selection.type === "project") {
-    return <PaneProject project={project} onUpdate={onUpdate} />;
+    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} currentUserId={currentUserId} />;
   }
 
   if (selection.type === "feature") {

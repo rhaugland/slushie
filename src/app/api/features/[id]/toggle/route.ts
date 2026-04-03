@@ -21,8 +21,7 @@ export async function POST(
     include: { project: true },
   });
 
-  // Minor features (build instructions) only update the DB flag — no manifest change.
-  // The parent major feature needs to be rebuilt to include/exclude the minor feature.
+  // Major features: update manifest
   if (!feature.parentId) {
     const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
     const projectDir = path.join(process.cwd(), "previews", slug);
@@ -40,6 +39,9 @@ export async function POST(
       });
     } catch { /* ignore */ }
   }
+
+  // Minor features: the DB flag is enough — the preview proxy checks
+  // enabled state at runtime and blocks disabled feature routes.
 
   return NextResponse.json(feature);
 }

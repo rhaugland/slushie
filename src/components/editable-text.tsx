@@ -56,10 +56,13 @@ export function EditableText({ value, onSave, className = "", inputClassName = "
         setDraft(value);
         setEditing(true);
       }}
-      className={`cursor-pointer hover:bg-white/[0.06] rounded px-1 -mx-1 transition-colors ${className}`}
+      className={`cursor-pointer hover:bg-white/[0.06] rounded px-1 -mx-1 transition-colors group/edit inline-flex items-center gap-1.5 ${className}`}
       title="Click to edit"
     >
       {value}
+      <svg className="w-3 h-3 opacity-0 group-hover/edit:opacity-40 transition-opacity shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+      </svg>
     </span>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TreeNode } from "./tree-node";
+import { EditableText } from "./editable-text";
 
 type Feature = {
   id: string;
@@ -41,9 +42,10 @@ type Props = {
   onToggle: (featureId: string, enabled: boolean) => void;
   onAddFeature: (parentId: string | null) => void;
   onCollapse: () => void;
+  onRenameProject?: (name: string) => void;
 };
 
-export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeature, onCollapse }: Props) {
+export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeature, onCollapse, onRenameProject }: Props) {
   const [meetingsOpen, setMeetingsOpen] = useState(false);
 
   const pendingSuggestions = project.meetings.reduce(
@@ -76,7 +78,16 @@ export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeatu
         }`}
       >
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-white/90">{project.name}</span>
+          {onRenameProject ? (
+            <EditableText
+              value={project.name}
+              onSave={onRenameProject}
+              className="text-sm font-semibold text-white/90"
+              inputClassName="text-sm font-semibold text-white/90"
+            />
+          ) : (
+            <span className="text-sm font-semibold text-white/90">{project.name}</span>
+          )}
           {project.deployUrl && (
             <a
               href={project.deployUrl}

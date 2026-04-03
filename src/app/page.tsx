@@ -150,6 +150,27 @@ export default function Home() {
               }
               loadProjects();
             }}
+            onProjectSettings={(projectId) => {
+              setSelectedProjectId(projectId);
+              setSelection({ type: "project" });
+            }}
+            onRenameProject={async (projectId, name) => {
+              await fetch(`/api/projects/${projectId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+              });
+              loadProjects();
+              if (selectedProjectId === projectId) loadProject(projectId);
+            }}
+            onCreateWorkspace={async (name) => {
+              await fetch("/api/workspaces", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+              });
+              loadUser();
+            }}
             onCollapse={() => setLeftCollapsed(true)}
             onWorkspaceSettings={(workspaceId) => {
               setSelectedProjectId(null);
@@ -188,6 +209,15 @@ export default function Home() {
                 onToggle={handleToggle}
                 onAddFeature={handleAddFeature}
                 onCollapse={() => setMiddleCollapsed(true)}
+                onRenameProject={async (name) => {
+                  await fetch(`/api/projects/${project.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name }),
+                  });
+                  loadProjects();
+                  loadProject(project.id);
+                }}
               />
             )
           )}
@@ -205,6 +235,7 @@ export default function Home() {
                 }}
                 workspaces={workspaces}
                 currentUserId={user?.id}
+                onOpenPreview={() => setPreviewMode("half")}
               />
             </main>
           )}

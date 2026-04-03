@@ -7,12 +7,13 @@ datasource db {
 }
 
 model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  name         String
-  passwordHash String
-  createdAt    DateTime          @default(now())
-  memberships  WorkspaceMember[]
+  id                String            @id @default(cuid())
+  email             String            @unique
+  name              String
+  passwordHash      String
+  createdAt         DateTime          @default(now())
+  memberships       WorkspaceMember[]
+  projectMemberships ProjectMember[]
 }
 
 model Workspace {
@@ -52,11 +53,28 @@ model Project {
   deployStatus String    @default("stopped") // stopped | starting | running | error
   port         Int?
   createdAt    DateTime  @default(now())
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   features     Feature[]
   meetings     Meeting[]
+  members      ProjectMember[]
 
   @@index([workspaceId])
+}
+
+model ProjectMember {
+  id           String   @id @default(cuid())
+  projectId    String
+  userId       String?
+  invitedEmail String?
+  role         String   @default("member") // owner | admin | member
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([invitedEmail])
 }
 
 model Feature {
