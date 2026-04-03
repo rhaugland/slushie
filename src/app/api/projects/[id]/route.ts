@@ -33,6 +33,7 @@ export async function GET(
         include: { suggestions: true },
         orderBy: { createdAt: "desc" },
       },
+      client: { select: { id: true, name: true } },
     },
   });
   if (!project) {
@@ -47,7 +48,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const allowed = ["name", "clientName", "themeConfig"];
+  const allowed = ["name", "themeConfig"];
   const data: Record<string, unknown> = {};
   for (const key of allowed) {
     if (body[key] !== undefined) data[key] = body[key];
