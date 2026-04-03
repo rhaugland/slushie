@@ -36,34 +36,34 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 export function PaneNotes({ workspaces }: Props) {
-  const allClients = workspaces.flatMap((m) =>
-    m.workspace.clients.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      projects: c.projects || [],
-    }))
+  const allProjects = workspaces.flatMap((m) =>
+    m.workspace.clients.flatMap((c: any) =>
+      (c.projects || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        clientId: c.id,
+        clientName: c.name,
+      }))
+    )
   );
 
-  const [selectedClientId, setSelectedClientId] = useState<string>(allClients[0]?.id || "");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(allProjects[0]?.id || "");
   const [notes, setNotes] = useState<MeetingNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   const [showNewNote, setShowNewNote] = useState(false);
   const [newNoteType, setNewNoteType] = useState<string | null>(null);
-  const [newNoteProjectId, setNewNoteProjectId] = useState<string>("");
   const [newNoteText, setNewNoteText] = useState("");
   const [newNoteFile, setNewNoteFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [liveMeeting, setLiveMeeting] = useState<{ meetingId: string; roomCode: string } | null>(null);
 
-  const selectedClient = allClients.find((c) => c.id === selectedClientId);
-
   const loadNotes = useCallback(async () => {
-    if (!selectedClientId) return;
+    if (!selectedProjectId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/notes?clientId=${selectedClientId}`, { cache: "no-store" });
+      const res = await fetch(`/api/notes?projectId=${selectedProjectId}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setNotes(data);
@@ -71,7 +71,7 @@ export function PaneNotes({ workspaces }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [selectedClientId]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     loadNotes();
@@ -87,7 +87,7 @@ export function PaneNotes({ workspaces }: Props) {
   }, [notes, loadNotes]);
 
   async function handleCreateNote() {
-    if (!newNoteType || !selectedClientId) return;
+    if (!newNoteType || !selectedProjectId) return;
     setCreating(true);
 
     if (newNoteType === "live_video") {
@@ -96,8 +96,7 @@ export function PaneNotes({ workspaces }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clientId: selectedClientId,
-            projectId: newNoteProjectId || null,
+            projectId: selectedProjectId,
           }),
         });
         const data = await res.json();
@@ -127,8 +126,7 @@ export function PaneNotes({ workspaces }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: selectedClientId,
-          projectId: newNoteProjectId || null,
+          projectId: selectedProjectId,
           type: newNoteType,
           audioUrl,
           imageUrl,
@@ -140,21 +138,9 @@ export function PaneNotes({ workspaces }: Props) {
       setNewNoteType(null);
       setNewNoteText("");
       setNewNoteFile(null);
-      setNewNoteProjectId("");
       loadNotes();
     } finally {
       setCreating(false);
-    }
-  }
-
-  const grouped: Record<string, MeetingNote[]> = {};
-  const unassigned: MeetingNote[] = [];
-  for (const note of notes) {
-    if (note.project) {
-      if (!grouped[note.project.name]) grouped[note.project.name] = [];
-      grouped[note.project.name].push(note);
-    } else {
-      unassigned.push(note);
     }
   }
 
@@ -172,13 +158,13 @@ export function PaneNotes({ workspaces }: Props) {
 
       <div className="mb-4">
         <select
-          value={selectedClientId}
-          onChange={(e) => { setSelectedClientId(e.target.value); setExpandedNoteId(null); }}
+          value={selectedProjectId}
+          onChange={(e) => { setSelectedProjectId(e.target.value); setExpandedNoteId(null); }}
           className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-white/20"
         >
-          {allClients.map((c) => (
-            <option key={c.id} value={c.id} className="bg-[#0c1120]">
-              {c.name}
+          {allProjects.map((p) => (
+            <option key={p.id} value={p.id} className="bg-[#0c1120]">
+              {p.clientName} / {p.name}
             </option>
           ))}
         </select>
@@ -218,19 +204,6 @@ export function PaneNotes({ workspaces }: Props) {
               </button>
             ))}
           </div>
-
-          {selectedClient && selectedClient.projects.length > 0 && (
-            <select
-              value={newNoteProjectId}
-              onChange={(e) => setNewNoteProjectId(e.target.value)}
-              className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white/60 focus:outline-none focus:border-white/20"
-            >
-              <option value="" className="bg-[#0c1120]">No specific project</option>
-              {selectedClient.projects.map((p: any) => (
-                <option key={p.id} value={p.id} className="bg-[#0c1120]">{p.name}</option>
-              ))}
-            </select>
-          )}
 
           {newNoteType === "text_note" && (
             <textarea
@@ -274,45 +247,18 @@ export function PaneNotes({ workspaces }: Props) {
       ) : notes.length === 0 ? (
         <p className="text-sm text-white/30">No notes yet. Create one to get started.</p>
       ) : (
-        <div className="space-y-6">
-          {unassigned.length > 0 && (
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">General</div>
-              <div className="space-y-2">
-                {unassigned.map((note) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    expanded={expandedNoteId === note.id}
-                    onToggle={() => setExpandedNoteId(expandedNoteId === note.id ? null : note.id)}
-                    onDelete={async () => {
-                      await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
-                      loadNotes();
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {Object.entries(grouped).map(([projectName, projectNotes]) => (
-            <div key={projectName}>
-              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">{projectName}</div>
-              <div className="space-y-2">
-                {projectNotes.map((note) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    expanded={expandedNoteId === note.id}
-                    onToggle={() => setExpandedNoteId(expandedNoteId === note.id ? null : note.id)}
-                    onDelete={async () => {
-                      await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
-                      loadNotes();
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
+        <div className="space-y-2">
+          {notes.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              expanded={expandedNoteId === note.id}
+              onToggle={() => setExpandedNoteId(expandedNoteId === note.id ? null : note.id)}
+              onDelete={async () => {
+                await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
+                loadNotes();
+              }}
+            />
           ))}
         </div>
       )}
