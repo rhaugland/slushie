@@ -7,6 +7,10 @@ import { ProjectTree } from "@/components/project-tree";
 import { ContextPane } from "@/components/context-pane";
 import { AddContext } from "@/components/add-context";
 import { PaneTeam } from "@/components/pane-team";
+import { PaneNotes } from "@/components/pane-notes";
+import { PaneWishlist } from "@/components/pane-wishlist";
+import { PaneFeedback } from "@/components/pane-feedback";
+import { AddMajorFeature } from "@/components/add-major-feature";
 
 type Selection =
   | { type: "project" }
@@ -14,7 +18,11 @@ type Selection =
   | { type: "meeting"; id: string }
   | { type: "workspace-settings"; workspaceId: string }
   | { type: "client-settings"; clientId: string }
-  | { type: "team" };
+  | { type: "team" }
+  | { type: "notes" }
+  | { type: "wishlist" }
+  | { type: "feedback" }
+  | { type: "add-major-feature" };
 
 export default function Home() {
   const router = useRouter();
@@ -91,16 +99,8 @@ export default function Home() {
       setAutoOpenAddFeature(true);
       return;
     }
-    const title = prompt("Feature name:");
-    if (!title) return;
-    const description = prompt("Short description:") || title;
-
-    await fetch(`/api/projects/${selectedProjectId}/features`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, parentId }),
-    });
-    if (selectedProjectId) loadProject(selectedProjectId);
+    // Major feature — open the AI-powered creation flow
+    setSelection({ type: "add-major-feature" });
   }
 
   async function handleLogout() {
@@ -219,6 +219,20 @@ export default function Home() {
               setSelection({ type: "team" });
             }}
             teamActive={selection.type === "team"}
+            onNotes={() => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "notes" });
+            }}
+            notesActive={selection.type === "notes"}
+            onWishlist={() => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "wishlist" });
+            }}
+            wishlistActive={selection.type === "wishlist"}
+            onFeedback={() => setSelection({ type: "feedback" })}
+            feedbackActive={selection.type === "feedback"}
           />
         )
       )}
@@ -271,20 +285,33 @@ export default function Home() {
           {/* Context pane (hidden in full preview, shares space in half) */}
           {previewMode !== "full" && (
             <main className="flex-1 p-6 overflow-y-auto">
-              <ContextPane
-                project={project}
-                selection={selection}
-                onUpdate={() => {
-                  if (selectedProjectId) loadProject(selectedProjectId);
-                  loadUser();
-                }}
-                workspaces={workspaces}
-                currentUserId={user?.id}
-                onOpenPreview={() => setPreviewMode("half")}
-                isAdmin={isAdminForWorkspace(project?.workspaceId)}
-                autoOpenAddFeature={autoOpenAddFeature}
-                onAutoOpenAddFeatureConsumed={() => setAutoOpenAddFeature(false)}
-              />
+              {selection.type === "add-major-feature" ? (
+                <AddMajorFeature
+                  projectId={project.id}
+                  projectName={project.name}
+                  onCreated={() => {
+                    if (selectedProjectId) loadProject(selectedProjectId);
+                    setSelection({ type: "project" });
+                  }}
+                  onCancel={() => setSelection({ type: "project" })}
+                />
+              ) : (
+                <ContextPane
+                  project={project}
+                  selection={selection}
+                  onUpdate={() => {
+                    if (selectedProjectId) loadProject(selectedProjectId);
+                    loadUser();
+                  }}
+                  workspaces={workspaces}
+                  currentUserId={user?.id}
+                  onOpenPreview={() => setPreviewMode("half")}
+                  isAdmin={isAdminForWorkspace(project?.workspaceId)}
+                  autoOpenAddFeature={autoOpenAddFeature}
+                  onAutoOpenAddFeatureConsumed={() => setAutoOpenAddFeature(false)}
+                  onAddMajorFeature={() => setSelection({ type: "add-major-feature" })}
+                />
+              )}
             </main>
           )}
 
@@ -360,6 +387,24 @@ export default function Home() {
             </div>
           )}
         </>
+      ) : selection.type === "notes" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <PaneNotes workspaces={workspaces} />
+        </main>
+      ) : selection.type === "wishlist" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <PaneWishlist
+            workspaces={workspaces}
+            onUpdate={() => loadUser()}
+          />
+        </main>
+      ) : selection.type === "feedback" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <PaneFeedback
+            workspaces={workspaces}
+            onUpdate={() => loadUser()}
+          />
+        </main>
       ) : selection.type === "team" ? (
         <main className="flex-1 p-6 overflow-y-auto">
           <PaneTeam
