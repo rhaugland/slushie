@@ -45,7 +45,7 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
     const cleanEnv = Object.fromEntries(
       Object.entries(process.env).filter(([k]) => !k.startsWith("CLAUDECODE") && !k.startsWith("CLAUDE_CODE"))
     );
-    const child = spawn("claude", [
+    const child = spawn("/usr/local/bin/claude", [
       "--print",
       "--output-format", "json",
       "-p", prompt,
@@ -55,7 +55,6 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
       timeout: 600000, // 10 min
       stdio: ["ignore", "pipe", "pipe"],
       env: cleanEnv,
-      shell: "/bin/bash",
     });
 
     let stdout = "";
