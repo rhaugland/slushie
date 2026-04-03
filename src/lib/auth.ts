@@ -75,18 +75,34 @@ export async function getCurrentUser() {
         include: {
           workspace: {
             include: {
-              projects: {
+              clients: {
                 include: {
-                  features: {
-                    where: { parentId: null },
-                    orderBy: { sortOrder: "asc" },
-                    include: { children: true },
+                  projects: {
+                    orderBy: { createdAt: "desc" },
+                    select: {
+                      id: true,
+                      name: true,
+                      deployUrl: true,
+                      deployStatus: true,
+                      workspaceId: true,
+                      clientId: true,
+                      features: {
+                        where: { parentId: null },
+                        orderBy: { sortOrder: "asc" },
+                        select: { id: true, status: true },
+                      },
+                    },
                   },
                 },
-                orderBy: { createdAt: "desc" },
+                orderBy: { name: "asc" },
               },
             },
           },
+        },
+      },
+      clientMemberships: {
+        include: {
+          projectAccess: { select: { projectId: true } },
         },
       },
     },
