@@ -34,12 +34,14 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#080d19]">
       <div className="w-full max-w-sm p-6">
-        <h1 className="text-xl font-semibold text-center mb-1">
+        <h1 className="text-2xl font-bold text-center mb-2">
           <span className="bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent">
             slushie.machine
           </span>
         </h1>
-        <p className="text-xs text-white/30 text-center mb-8">Sign in to your account</p>
+        <p className="text-xs text-white/40 text-center leading-relaxed mb-8 max-w-xs mx-auto">
+          One machine. Every flavor of your client's vision — blended from meetings, feedback, and ideas into software they can taste. No recipe needed.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
