@@ -34,6 +34,8 @@ model Client {
   workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projects    Project[]
   members     ClientMember[]
+  meetings      Meeting[]
+  wishlistItems WishlistItem[]
 
   @@index([workspaceId])
 }
@@ -100,6 +102,7 @@ model Project {
   features     Feature[]
   meetings     Meeting[]
   clientMemberAccess ClientMemberProject[]
+  wishlistItems WishlistItem[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -157,15 +160,24 @@ model FeatureBuild {
 
 model Meeting {
   id          String              @id @default(cuid())
-  projectId   String
-  audioUrl    String
+  projectId   String?
+  clientId    String?
+  type        String              @default("audio_upload") // audio_upload | live_video | text_note | handwritten
+  audioUrl    String?
+  imageUrl    String?
+  textContent String?             @db.Text
+  summary     String?             @db.Text
   transcript  String?             @db.Text
   status      String              @default("uploading") // uploading | transcribing | extracting | ready | failed
   createdAt   DateTime            @default(now())
-  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client      Client?             @relation(fields: [clientId], references: [id], onDelete: Cascade)
   suggestions MeetingSuggestion[]
+  wishlistItems WishlistItem[]
+  liveRoom    LiveRoom?
 
   @@index([projectId])
+  @@index([clientId])
 }
 
 model ActivityLog {
@@ -199,4 +211,35 @@ model MeetingSuggestion {
   meeting              Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
+}
+
+model WishlistItem {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String   @db.Text
+  priority             String?  // high | medium | low
+  source               String   @default("meeting") // meeting | manual | feedback
+  status               String   @default("pending") // pending | moved | dismissed
+  clientId             String
+  projectId            String?
+  meetingId            String?
+  meetingSuggestionId  String?
+  featureId            String?
+  createdAt            DateTime @default(now())
+  client               Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project              Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  meeting              Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model LiveRoom {
+  id        String   @id @default(cuid())
+  meetingId String   @unique
+  roomCode  String   @unique
+  status    String   @default("waiting") // waiting | active | ended
+  createdAt DateTime @default(now())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
