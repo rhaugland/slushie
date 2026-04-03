@@ -11,12 +11,12 @@ type Selection =
   | { type: "project" }
   | { type: "feature"; id: string }
   | { type: "meeting"; id: string }
-  | { type: "workspace-settings"; workspaceId: string };
+  | { type: "workspace-settings"; workspaceId: string }
+  | { type: "client-settings"; clientId: string };
 
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>({ type: "project" });
   const [project, setProject] = useState<any>(null);
@@ -25,7 +25,7 @@ export default function Home() {
   const [previewMode, setPreviewMode] = useState<"collapsed" | "half" | "full">("collapsed");
 
   const loadUser = useCallback(async () => {
-    const res = await fetch("/api/auth/me");
+    const res = await fetch("/api/auth/me", { cache: "no-store" });
     if (!res.ok) {
       router.push("/login");
       return;
@@ -34,23 +34,15 @@ export default function Home() {
     setUser(data);
   }, [router]);
 
-  const loadProjects = useCallback(async () => {
-    const res = await fetch("/api/projects");
-    if (!res.ok) return;
-    const data = await res.json();
-    setProjects(data);
-  }, []);
-
   const loadProject = useCallback(async (id: string) => {
-    const res = await fetch(`/api/projects/${id}`);
+    const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
     const data = await res.json();
     setProject(data);
   }, []);
 
   useEffect(() => {
     loadUser();
-    loadProjects();
-  }, [loadUser, loadProjects]);
+  }, [loadUser]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -109,6 +101,10 @@ export default function Home() {
 
   const workspaces = user?.memberships || [];
 
+  const allProjects = workspaces.flatMap((m: any) =>
+    m.workspace.clients.flatMap((c: any) => c.projects)
+  );
+
   return (
     <div className="flex min-h-screen">
       {/* Left sidebar — project list (hidden in full preview) */}
@@ -130,16 +126,11 @@ export default function Home() {
           </button>
         ) : (
           <ProjectSidebar
-            projects={projects}
             workspaces={workspaces}
             selectedId={selectedProjectId}
             onSelect={(id) => {
               setSelectedProjectId(id);
               setSelection({ type: "project" });
-            }}
-            onProjectCreated={() => {
-              loadProjects();
-              loadUser();
             }}
             onDeleteProject={async (id) => {
               await fetch(`/api/projects/${id}`, { method: "DELETE" });
@@ -148,11 +139,23 @@ export default function Home() {
                 setProject(null);
                 setSelection({ type: "project" });
               }
-              loadProjects();
+              loadUser();
+            }}
+            onDeleteClient={async (id) => {
+              await fetch(`/api/clients/${id}`, { method: "DELETE" });
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "project" });
+              loadUser();
             }}
             onProjectSettings={(projectId) => {
               setSelectedProjectId(projectId);
               setSelection({ type: "project" });
+            }}
+            onClientSettings={(clientId) => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "client-settings", clientId });
             }}
             onRenameProject={async (projectId, name) => {
               await fetch(`/api/projects/${projectId}`, {
@@ -160,17 +163,23 @@ export default function Home() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name }),
               });
-              loadProjects();
+              loadUser();
               if (selectedProjectId === projectId) loadProject(projectId);
             }}
             onCreateWorkspace={async (name) => {
-              await fetch("/api/workspaces", {
+              const res = await fetch("/api/workspaces", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name }),
               });
-              loadUser();
+              if (!res.ok) {
+                const data = await res.json();
+                return data.error || "Failed to create workspace";
+              }
+              await loadUser();
+              return null;
             }}
+            onRefresh={() => loadUser()}
             onCollapse={() => setLeftCollapsed(true)}
             onWorkspaceSettings={(workspaceId) => {
               setSelectedProjectId(null);
@@ -204,8 +213,8 @@ export default function Home() {
             ) : (
               <ProjectTree
                 project={project}
-                selection={selection}
-                onSelect={setSelection}
+                selection={selection as any}
+                onSelect={(sel) => setSelection(sel as Selection)}
                 onToggle={handleToggle}
                 onAddFeature={handleAddFeature}
                 onCollapse={() => setMiddleCollapsed(true)}
@@ -215,7 +224,7 @@ export default function Home() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ name }),
                   });
-                  loadProjects();
+                  loadUser();
                   loadProject(project.id);
                 }}
               />
@@ -230,7 +239,6 @@ export default function Home() {
                 selection={selection}
                 onUpdate={() => {
                   if (selectedProjectId) loadProject(selectedProjectId);
-                  loadProjects();
                   loadUser();
                 }}
                 workspaces={workspaces}
@@ -312,15 +320,12 @@ export default function Home() {
             </div>
           )}
         </>
-      ) : selection.type === "workspace-settings" ? (
+      ) : selection.type === "workspace-settings" || selection.type === "client-settings" ? (
         <main className="flex-1 p-6 overflow-y-auto">
           <ContextPane
             project={null}
             selection={selection}
-            onUpdate={() => {
-              loadProjects();
-              loadUser();
-            }}
+            onUpdate={() => loadUser()}
             workspaces={workspaces}
             currentUserId={user?.id}
           />
@@ -328,9 +333,9 @@ export default function Home() {
       ) : (
         <main className="flex-1 p-6 overflow-y-auto">
           <AddContext
-            projects={projects}
+            projects={allProjects}
             onUpdate={() => {
-              loadProjects();
+              loadUser();
               if (selectedProjectId) loadProject(selectedProjectId);
             }}
             onProjectSelected={(id) => {

@@ -4,17 +4,19 @@ import { PaneProject } from "./pane-project";
 import { PaneFeature } from "./pane-feature";
 import { PaneMeeting } from "./pane-meeting";
 import { WorkspaceSettings } from "./workspace-settings";
+import { ClientSettings } from "./client-settings";
 
 type Selection =
   | { type: "project" }
   | { type: "feature"; id: string }
   | { type: "meeting"; id: string }
-  | { type: "workspace-settings"; workspaceId: string };
+  | { type: "workspace-settings"; workspaceId: string }
+  | { type: "client-settings"; clientId: string };
 
 type WorkspaceMembership = {
   workspaceId: string;
   role: string;
-  workspace: { id: string; name: string; slug: string };
+  workspace: { id: string; name: string; slug: string; clients: any[] };
 };
 
 type Props = {
@@ -40,8 +42,25 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
     );
   }
 
+  if (selection.type === "client-settings") {
+    const allClients = workspaces?.flatMap((m) => m.workspace.clients || []) || [];
+    const clientData = allClients.find((c: any) => c.id === selection.clientId);
+    if (!clientData || !currentUserId) return null;
+    const clientProjects: { id: string; name: string }[] = (clientData.projects || []).map(
+      (p: any) => ({ id: p.id, name: p.name })
+    );
+    return (
+      <ClientSettings
+        client={clientData}
+        projects={clientProjects}
+        currentUserId={currentUserId}
+        onUpdate={onUpdate}
+      />
+    );
+  }
+
   if (selection.type === "project") {
-    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} currentUserId={currentUserId} />;
+    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} />;
   }
 
   if (selection.type === "feature") {
