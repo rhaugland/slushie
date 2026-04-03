@@ -3,12 +3,12 @@
 import { useState } from "react";
 
 type Props = {
-  clientId: string;
+  workspaceId: string;
   onCreated: () => void;
   onCancel: () => void;
 };
 
-export function CreateProjectForm({ clientId, onCreated, onCancel }: Props) {
+export function CreateClientForm({ workspaceId, onCreated, onCancel }: Props) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,18 +19,18 @@ export function CreateProjectForm({ clientId, onCreated, onCancel }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/projects", {
+      const res = await fetch("/api/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), clientId }),
+        body: JSON.stringify({ name: name.trim(), workspaceId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create project");
+        throw new Error(data.error || "Failed to create client");
       }
       onCreated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create project");
+      setError(e instanceof Error ? e.message : "Failed to create client");
       setLoading(false);
     }
   }
@@ -43,7 +43,7 @@ export function CreateProjectForm({ clientId, onCreated, onCancel }: Props) {
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Project name"
+        placeholder="Client name"
         className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
         autoFocus
       />
@@ -54,7 +54,7 @@ export function CreateProjectForm({ clientId, onCreated, onCancel }: Props) {
           disabled={loading || !name.trim()}
           className="flex-1 text-xs py-1 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
         >
-          {loading ? "Creating..." : "Add project"}
+          {loading ? "Creating..." : "Add client"}
         </button>
         <button
           type="button"

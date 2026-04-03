@@ -2,16 +2,23 @@
 
 import { useState } from "react";
 import { CreateProjectForm } from "./create-project-form";
+import { CreateClientForm } from "./create-client-form";
 import { EditableText } from "./editable-text";
 
-type Project = {
+type ProjectSummary = {
   id: string;
   name: string;
-  clientName: string;
+  clientId: string;
   workspaceId: string;
   deployUrl: string | null;
   deployStatus: string;
   features: { id: string; status: string }[];
+};
+
+type ClientData = {
+  id: string;
+  name: string;
+  projects: ProjectSummary[];
 };
 
 type WorkspaceMembership = {
@@ -21,8 +28,44 @@ type WorkspaceMembership = {
     id: string;
     name: string;
     slug: string;
+    clients: ClientData[];
   };
 };
+
+type Props = {
+  workspaces: WorkspaceMembership[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDeleteProject: (id: string) => void;
+  onDeleteClient: (id: string) => void;
+  onCollapse: () => void;
+  onWorkspaceSettings: (workspaceId: string) => void;
+  onClientSettings: (clientId: string) => void;
+  onProjectSettings: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => void;
+  onCreateWorkspace: (name: string) => Promise<string | null>;
+  onRefresh: () => void;
+  onLogout: () => void;
+};
+
+// SVG icon helpers
+function GearIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
 
 function ProjectItem({
   project,
@@ -32,7 +75,7 @@ function ProjectItem({
   onSettings,
   onRename,
 }: {
-  project: Project;
+  project: ProjectSummary;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -87,73 +130,57 @@ function ProjectItem({
             </span>
           )}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSettings();
-            }}
+            onClick={(e) => { e.stopPropagation(); onSettings(); }}
             className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-white/40 transition-all p-0.5"
             title="Project settings"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <GearIcon />
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmDelete(true);
-            }}
+            onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
             className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 transition-all p-0.5"
             title="Delete project"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
+            <TrashIcon />
           </button>
         </div>
       </div>
-      <div className="text-[0.6rem] text-white/30 mt-0.5">{project.clientName}</div>
     </div>
   );
 }
 
-type Props = {
-  projects: Project[];
-  workspaces: WorkspaceMembership[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onProjectCreated: () => void;
-  onDeleteProject: (id: string) => void;
-  onCollapse: () => void;
-  onWorkspaceSettings: (workspaceId: string) => void;
-  onProjectSettings: (projectId: string) => void;
-  onRenameProject: (projectId: string, name: string) => void;
-  onCreateWorkspace: (name: string) => void;
-  onLogout: () => void;
-};
-
 export function ProjectSidebar({
-  projects,
   workspaces,
   selectedId,
   onSelect,
-  onProjectCreated,
   onDeleteProject,
+  onDeleteClient,
   onCollapse,
   onWorkspaceSettings,
+  onClientSettings,
   onProjectSettings,
   onRenameProject,
   onCreateWorkspace,
+  onRefresh,
   onLogout,
 }: Props) {
-  const [showForm, setShowForm] = useState(false);
   const [showWsForm, setShowWsForm] = useState(false);
   const [wsName, setWsName] = useState("");
+  const [wsError, setWsError] = useState("");
+  const [wsCreating, setWsCreating] = useState(false);
+
+  // Per-client: which client is showing new project form
+  const [newProjectClientId, setNewProjectClientId] = useState<string | null>(null);
+
+  // Per-workspace: which workspace is showing new client form
+  const [newClientWorkspaceId, setNewClientWorkspaceId] = useState<string | null>(null);
+
+  // Per-client: confirm delete state
+  const [confirmDeleteClientId, setConfirmDeleteClientId] = useState<string | null>(null);
 
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-sm font-bold tracking-tight">
           <span className="bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent">
@@ -171,108 +198,200 @@ export function ProjectSidebar({
         </button>
       </div>
 
-      <button
-        onClick={() => setShowForm(!showForm)}
-        className="w-full mb-4 px-3 py-2 text-xs rounded-lg border border-dashed border-white/10 text-white/40 hover:text-white/60 hover:border-white/20 transition-colors"
-      >
-        + New project
-      </button>
-
-      {showForm && (
-        <CreateProjectForm
-          workspaces={workspaces.map((m) => m.workspace)}
-          onCreated={() => {
-            setShowForm(false);
-            onProjectCreated();
-          }}
-          onCancel={() => setShowForm(false)}
-        />
-      )}
-
-      <button
-        onClick={() => setShowWsForm(!showWsForm)}
-        className="w-full mb-4 px-3 py-2 text-xs rounded-lg border border-dashed border-white/10 text-white/40 hover:text-white/60 hover:border-white/20 transition-colors"
-      >
-        + New workspace
-      </button>
-
-      {showWsForm && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!wsName.trim()) return;
-            onCreateWorkspace(wsName.trim());
-            setWsName("");
-            setShowWsForm(false);
-          }}
-          className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] space-y-2"
-        >
-          <input
-            value={wsName}
-            onChange={(e) => setWsName(e.target.value)}
-            placeholder="Workspace name"
-            className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="flex-1 text-xs py-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-            >
-              Create
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowWsForm(false)}
-              className="text-xs py-1.5 px-3 rounded text-white/30 hover:text-white/50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="flex-1 overflow-y-auto space-y-4">
+      {/* Workspace list */}
+      <div className="flex-1 overflow-y-auto space-y-6">
         {workspaces.map((membership) => {
-          const wsProjects = projects.filter((p) => p.workspaceId === membership.workspace.id);
+          const ws = membership.workspace;
           return (
-            <div key={membership.workspace.id}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-[0.6rem] uppercase tracking-widest text-white/40">
-                  {membership.workspace.name}
+            <div key={ws.id}>
+              {/* Workspace header */}
+              <div className="flex items-center justify-between mb-2 group">
+                <div className="text-[0.6rem] uppercase tracking-widest text-white/40 truncate">
+                  {ws.name}
                 </div>
                 <button
-                  onClick={() => onWorkspaceSettings(membership.workspace.id)}
-                  className="text-white/20 hover:text-white/40 transition-colors p-0.5"
+                  onClick={() => onWorkspaceSettings(ws.id)}
+                  className="text-white/20 hover:text-white/40 transition-colors p-0.5 shrink-0"
                   title="Workspace settings"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
+                  <GearIcon />
                 </button>
               </div>
-              <div className="space-y-1">
-                {wsProjects.map((p) => (
-                  <ProjectItem
-                    key={p.id}
-                    project={p}
-                    isSelected={p.id === selectedId}
-                    onSelect={() => onSelect(p.id)}
-                    onDelete={() => onDeleteProject(p.id)}
-                    onSettings={() => onProjectSettings(p.id)}
-                    onRename={(name) => onRenameProject(p.id, name)}
+
+              {/* Clients */}
+              <div className="ml-1 space-y-3">
+                {ws.clients.map((client) => {
+                  const isConfirmingDelete = confirmDeleteClientId === client.id;
+
+                  return (
+                    <div key={client.id}>
+                      {/* Client header */}
+                      {isConfirmingDelete ? (
+                        <div className="px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20 mb-1">
+                          <p className="text-[0.6rem] text-red-400 mb-1.5">
+                            Delete {client.name} and all its projects?
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                onDeleteClient(client.id);
+                                setConfirmDeleteClientId(null);
+                              }}
+                              className="text-[0.55rem] px-2 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteClientId(null)}
+                              className="text-[0.55rem] px-2 py-0.5 rounded bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between mb-1 group/client">
+                          <span className="text-[0.55rem] uppercase tracking-widest text-white/30 truncate">
+                            {client.name}
+                          </span>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover/client:opacity-100 transition-opacity shrink-0">
+                            <button
+                              onClick={() => onClientSettings(client.id)}
+                              className="text-white/20 hover:text-white/50 transition-colors p-0.5"
+                              title="Client settings"
+                            >
+                              <GearIcon size={11} />
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteClientId(client.id)}
+                              className="text-white/20 hover:text-red-400 transition-colors p-0.5"
+                              title="Delete client"
+                            >
+                              <TrashIcon size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Projects under client */}
+                      <div className="ml-2 space-y-1">
+                        {client.projects.map((project) => (
+                          <ProjectItem
+                            key={project.id}
+                            project={project}
+                            isSelected={project.id === selectedId}
+                            onSelect={() => onSelect(project.id)}
+                            onDelete={() => onDeleteProject(project.id)}
+                            onSettings={() => onProjectSettings(project.id)}
+                            onRename={(name) => onRenameProject(project.id, name)}
+                          />
+                        ))}
+
+                        {/* New project form / button */}
+                        {newProjectClientId === client.id ? (
+                          <CreateProjectForm
+                            clientId={client.id}
+                            onCreated={() => {
+                              setNewProjectClientId(null);
+                              onRefresh();
+                            }}
+                            onCancel={() => setNewProjectClientId(null)}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setNewProjectClientId(client.id)}
+                            className="w-full text-left px-3 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
+                          >
+                            + New project
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* New client form / button */}
+                {newClientWorkspaceId === ws.id ? (
+                  <CreateClientForm
+                    workspaceId={ws.id}
+                    onCreated={() => {
+                      setNewClientWorkspaceId(null);
+                      onRefresh();
+                    }}
+                    onCancel={() => setNewClientWorkspaceId(null)}
                   />
-                ))}
-                {wsProjects.length === 0 && (
-                  <p className="text-[0.6rem] text-white/15 px-3 py-1">No projects yet</p>
+                ) : (
+                  <button
+                    onClick={() => setNewClientWorkspaceId(ws.id)}
+                    className="w-full text-left px-2 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
+                  >
+                    + New client
+                  </button>
                 )}
               </div>
             </div>
           );
         })}
+
+        {/* New workspace */}
+        {showWsForm ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!wsName.trim() || wsCreating) return;
+              setWsError("");
+              setWsCreating(true);
+              try {
+                const error = await onCreateWorkspace(wsName.trim());
+                if (error) {
+                  setWsError(error);
+                } else {
+                  setWsName("");
+                  setShowWsForm(false);
+                  onRefresh();
+                }
+              } finally {
+                setWsCreating(false);
+              }
+            }}
+            className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] space-y-2"
+          >
+            <input
+              value={wsName}
+              onChange={(e) => setWsName(e.target.value)}
+              placeholder="Workspace name"
+              className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              autoFocus
+            />
+            {wsError && <p className="text-xs text-red-400">{wsError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={wsCreating}
+                className="flex-1 text-xs py-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+              >
+                {wsCreating ? "Creating..." : "Create"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowWsForm(false); setWsError(""); }}
+                className="text-xs py-1.5 px-3 rounded text-white/30 hover:text-white/50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            onClick={() => setShowWsForm(true)}
+            className="w-full text-left px-1 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
+          >
+            + New workspace
+          </button>
+        )}
       </div>
 
+      {/* Log out */}
       <button
         onClick={onLogout}
         className="mt-4 w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors"
