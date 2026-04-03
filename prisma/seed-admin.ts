@@ -27,8 +27,8 @@ async function main() {
   for (const ws of workspaces) {
     await prisma.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: ws.id, userId: user.id } },
-      update: { role: "owner" },
-      create: { workspaceId: ws.id, userId: user.id, role: "owner" },
+      update: { role: "admin" },
+      create: { workspaceId: ws.id, userId: user.id, role: "admin" },
     });
     console.log(`Linked as owner of workspace: ${ws.name}`);
   }

@@ -33,11 +33,11 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const membership = user.memberships.find((m) => m.workspaceId === id);
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
+  if (!membership || !["admin", "owner"].includes(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { email } = await req.json();
+  const { email, role: requestedRole } = await req.json();
   if (!email?.trim()) {
     return NextResponse.json({ error: "email required" }, { status: 400 });
   }
@@ -64,7 +64,7 @@ export async function POST(
       workspaceId: id,
       userId: existingUser?.id || null,
       invitedEmail: existingUser ? null : trimmedEmail,
-      role: "member",
+      role: requestedRole === "admin" ? "admin" : "member",
     },
     include: { user: { select: { id: true, name: true, email: true } } },
   });

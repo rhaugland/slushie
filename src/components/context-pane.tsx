@@ -26,9 +26,12 @@ type Props = {
   workspaces?: WorkspaceMembership[];
   currentUserId?: string;
   onOpenPreview?: () => void;
+  isAdmin?: boolean;
+  autoOpenAddFeature?: boolean;
+  onAutoOpenAddFeatureConsumed?: () => void;
 };
 
-export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId, onOpenPreview }: Props) {
+export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId, onOpenPreview, isAdmin, autoOpenAddFeature, onAutoOpenAddFeatureConsumed }: Props) {
   if (selection.type === "workspace-settings") {
     const membership = workspaces?.find((m) => m.workspaceId === selection.workspaceId);
     if (!membership || !currentUserId) return null;
@@ -60,7 +63,7 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
   }
 
   if (selection.type === "project") {
-    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} />;
+    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} isAdmin={isAdmin} />;
   }
 
   if (selection.type === "feature") {
@@ -77,12 +80,15 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
 
     return (
       <PaneFeature
+        key={feature.id}
         feature={feature}
         projectId={project.id}
         deployUrl={project.deployUrl || null}
         parentTitle={parentFeature?.title || null}
         parentRoute={parentFeature?.route || null}
         onUpdate={onUpdate}
+        autoOpenAddFeature={autoOpenAddFeature}
+        onAutoOpenAddFeatureConsumed={onAutoOpenAddFeatureConsumed}
       />
     );
   }

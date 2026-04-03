@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       slug,
       members: {
-        create: { userId: user.id, role: "owner" },
+        create: { userId: user.id, role: "admin" },
       },
     },
   });

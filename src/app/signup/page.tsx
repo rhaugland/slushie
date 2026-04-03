@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
@@ -9,7 +9,35 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingWorkspaces, setPendingWorkspaces] = useState<string[]>([]);
   const router = useRouter();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Check for pending invites when email changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!email || !email.includes("@") || !email.includes(".")) {
+      setPendingWorkspaces([]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/auth/check-invites?email=${encodeURIComponent(email)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPendingWorkspaces(data.workspaces || []);
+        }
+      } catch {
+        // ignore
+      }
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [email]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,14 +79,24 @@ export default function SignupPage() {
             required
             className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
           />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            required
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
-          />
+          <div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
+            />
+            {pendingWorkspaces.length > 0 && (
+              <p className="text-xs text-blue-400 mt-1.5 px-1">
+                You will automatically join{" "}
+                <span className="font-medium">
+                  {pendingWorkspaces.join(", ")}
+                </span>
+              </p>
+            )}
+          </div>
           <input
             type="password"
             value={password}

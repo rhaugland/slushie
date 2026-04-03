@@ -11,7 +11,7 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const membership = user.memberships.find((m) => m.workspaceId === id);
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
+  if (!membership || !["admin"].includes(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

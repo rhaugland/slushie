@@ -55,6 +55,8 @@ type Props = {
   parentTitle: string | null;
   parentRoute: string | null;
   onUpdate: () => void;
+  autoOpenAddFeature?: boolean;
+  onAutoOpenAddFeatureConsumed?: () => void;
 };
 
 function deriveRoute(title: string): string {
@@ -75,15 +77,27 @@ const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   error: { text: "Error", color: "text-red-400 bg-red-500/10" },
 };
 
-export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parentRoute, onUpdate }: Props) {
+export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parentRoute, onUpdate, autoOpenAddFeature, onAutoOpenAddFeatureConsumed }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(feature.title);
   const [description, setDescription] = useState(feature.description);
   const [building, setBuilding] = useState(false);
+  const [addingFeature, setAddingFeature] = useState(false);
+  const [newFeatureTitle, setNewFeatureTitle] = useState("");
+  const [newFeaturePrompt, setNewFeaturePrompt] = useState("");
+  const [addingLoading, setAddingLoading] = useState(false);
+
+  // Auto-open add feature form when triggered from sidebar
+  useEffect(() => {
+    if (autoOpenAddFeature && !feature.parentId) {
+      setAddingFeature(true);
+      onAutoOpenAddFeatureConsumed?.();
+    }
+  }, [autoOpenAddFeature, feature.parentId, onAutoOpenAddFeatureConsumed]);
 
   const isMajor = !feature.parentId;
   const statusInfo = STATUS_LABEL[feature.status] || STATUS_LABEL.draft;
-  const latestBuild = feature.builds[0] || null;
+  const latestBuild = (feature.builds || [])[0] || null;
 
   let buildProgress: { step: number; total: number; message: string } | null = null;
   if (latestBuild?.buildLogs) {
@@ -110,6 +124,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
   }
 
   async function handleDelete() {
+    if (!confirm(`Delete "${feature.title}"? This cannot be undone.`)) return;
     await fetch(`/api/features/${feature.id}`, { method: "DELETE" });
     onUpdate();
   }
@@ -246,11 +261,50 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
   if (!isMajor) {
     return (
       <div>
-        {/* Header */}
+        {/* Header with status */}
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-[#f1f5f9] mb-1">{feature.title}</h2>
+          <div className="flex items-start justify-between">
+            <h2 className="text-xl font-semibold text-[#f1f5f9] mb-1">{feature.title}</h2>
+            <span className={`text-[0.6rem] px-2 py-1 rounded-md shrink-0 ${statusInfo.color}`}>
+              {feature.status === "building" ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
+                  <BuildCountdown />
+                </span>
+              ) : statusInfo.text}
+            </span>
+          </div>
           <p className="text-sm text-white/40 mb-1">{feature.description}</p>
         </div>
+
+        {/* Build progress bar when building */}
+        {feature.status === "building" && (
+          <div className="bg-white/[0.03] rounded-lg border border-yellow-500/20 p-4 mb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="w-2.5 h-2.5 border-2 border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
+              <span className="text-xs text-yellow-400/80">Claude Code is building this feature...</span>
+            </div>
+            <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-yellow-500/60 to-yellow-400/80 animate-pulse" style={{ width: "100%" }} />
+            </div>
+          </div>
+        )}
+
+        {/* Build log from latest build */}
+        {latestBuild?.buildLogs && feature.status !== "building" && (
+          <details className="mb-4">
+            <summary className="text-[0.6rem] uppercase tracking-widest text-white/30 cursor-pointer hover:text-white/50 mb-2">
+              Build Log {latestBuild.status === "failed" ? "(failed)" : ""}
+            </summary>
+            <pre className={`text-[0.6rem] whitespace-pre-wrap max-h-48 overflow-y-auto rounded-lg border p-3 ${
+              latestBuild.status === "failed"
+                ? "text-red-400/60 border-red-500/20 bg-red-500/5"
+                : "text-white/30 border-white/[0.06] bg-white/[0.02]"
+            }`}>
+              {latestBuild.buildLogs.slice(-3000)}
+            </pre>
+          </details>
+        )}
 
         {/* Build mode toggle + action */}
         <div className="bg-white/[0.03] rounded-lg border border-white/[0.08] p-4 mb-4">
@@ -512,9 +566,27 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             );
           })}
         </div>
+
+        {/* Delete feature */}
+        <div className="border-t border-white/[0.06] pt-4 mt-6">
+          <button
+            onClick={handleDelete}
+            className="px-4 py-2 text-xs rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            Delete feature
+          </button>
+        </div>
       </div>
     );
   }
+
+  // Poll for updates while any child feature is building
+  const anyChildBuilding = (feature.children || []).some((c: any) => c.status === "building");
+  useEffect(() => {
+    if (!anyChildBuilding) return;
+    const interval = setInterval(() => onUpdate(), 5000);
+    return () => clearInterval(interval);
+  }, [anyChildBuilding, onUpdate]);
 
   // Major feature pane
   return (
@@ -566,64 +638,131 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
         </div>
       )}
 
-      <div className="flex gap-2 mb-6">
-        {(feature.status === "draft" || feature.status === "error") && (
-          <button
-            onClick={handleBuild}
-            disabled={building}
-            className="px-4 py-2 text-xs rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {building ? "Starting..." : "Build"}
-          </button>
-        )}
-        {feature.status === "live" && (
-          <button
-            onClick={handleBuild}
-            disabled={building}
-            className="px-4 py-2 text-xs rounded-lg bg-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.1] transition-colors"
-          >
-            Rebuild
-          </button>
-        )}
-        {!editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="px-4 py-2 text-xs rounded-lg bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
-          >
-            Edit
-          </button>
-        )}
-        <button
-          onClick={handleDelete}
-          className="px-4 py-2 text-xs rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-        >
-          Delete
-        </button>
-      </div>
-
+      {/* Minor features list with toggle and add */}
       {feature.children && feature.children.length > 0 && (
-        <div className="border-t border-white/[0.06] pt-4">
+        <div className="mb-6">
           <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">
-            Build Instructions
+            Features
           </div>
-          <div className="space-y-2">
-            {feature.children.filter((child: any) => child.enabled).map((child: any) => (
+          <div className="space-y-1.5">
+            {feature.children.map((child: any) => (
               <div
                 key={child.id}
-                className="flex items-center justify-between px-3 py-2 rounded-md border bg-white/[0.03] border-white/[0.08]"
+                className="flex items-center justify-between px-3 py-2 rounded-lg border bg-white/[0.03] border-white/[0.06] group"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-xs text-white/70">{child.title}</div>
-                  <div className="text-[0.6rem] text-white/30">{child.description}</div>
+                  {child.description && (
+                    <div className="text-[0.6rem] text-white/30 truncate">{child.description}</div>
+                  )}
                 </div>
-                <span className="text-[0.55rem] px-1.5 py-0.5 rounded text-green-400/70 bg-green-500/10">
-                  included
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {child.status === "building" && (
+                    <span className="flex items-center gap-1 text-[0.55rem] text-yellow-400/60">
+                      <span className="w-1.5 h-1.5 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
+                    </span>
+                  )}
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    child.status === "live" ? "bg-green-400" :
+                    child.status === "building" ? "bg-yellow-400" :
+                    child.status === "error" ? "bg-red-400" :
+                    "bg-white/20"
+                  }`} />
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/features/${child.id}/toggle`, { method: "POST" });
+                      onUpdate();
+                    }}
+                    className={`w-7 h-4 rounded-full transition-colors relative ${
+                      child.enabled ? "bg-blue-500" : "bg-white/10"
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                      child.enabled ? "left-3.5" : "left-0.5"
+                    }`} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Add minor feature */}
+      <div className="mb-6">
+        {addingFeature ? (
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+            <p className="text-[0.6rem] uppercase tracking-widest text-white/30">New Feature</p>
+            <input
+              value={newFeatureTitle}
+              onChange={(e) => setNewFeatureTitle(e.target.value)}
+              placeholder="Feature name"
+              autoFocus
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
+            />
+            <textarea
+              value={newFeaturePrompt}
+              onChange={(e) => setNewFeaturePrompt(e.target.value)}
+              placeholder="Describe what this feature should do. Claude Code will build it for you..."
+              rows={4}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (!newFeatureTitle.trim() || !newFeaturePrompt.trim() || addingLoading) return;
+                  setAddingLoading(true);
+                  try {
+                    // Create the feature
+                    const createRes = await fetch(`/api/projects/${projectId}/features`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        title: newFeatureTitle.trim(),
+                        description: newFeaturePrompt.trim(),
+                        parentId: feature.id,
+                      }),
+                    });
+                    if (!createRes.ok) return;
+                    const newFeature = await createRes.json();
+
+                    // Trigger Claude Code build
+                    await fetch(`/api/features/${newFeature.id}/build-og`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ prompt: newFeaturePrompt.trim() }),
+                    });
+
+                    setNewFeatureTitle("");
+                    setNewFeaturePrompt("");
+                    setAddingFeature(false);
+                    onUpdate();
+                  } finally {
+                    setAddingLoading(false);
+                  }
+                }}
+                disabled={addingLoading || !newFeatureTitle.trim() || !newFeaturePrompt.trim()}
+                className="px-4 py-2 text-xs rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {addingLoading ? "Creating..." : "Build Feature"}
+              </button>
+              <button
+                onClick={() => { setAddingFeature(false); setNewFeatureTitle(""); setNewFeaturePrompt(""); }}
+                className="px-4 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingFeature(true)}
+            className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors"
+          >
+            + Add feature
+          </button>
+        )}
+      </div>
 
       {deployUrl && (() => {
         const majorRoute = feature.route || deriveRoute(feature.title);

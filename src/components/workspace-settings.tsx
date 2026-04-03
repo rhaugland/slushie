@@ -23,7 +23,8 @@ export function WorkspaceSettings({ workspace, currentUserId, userRole, onWorksp
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState("");
 
-  const isAdmin = userRole === "owner" || userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "owner";
+  const [inviteRole, setInviteRole] = useState<string>("member");
 
   const loadMembers = useCallback(async () => {
     const res = await fetch(`/api/workspaces/${workspace.id}/members`);
@@ -52,7 +53,7 @@ export function WorkspaceSettings({ workspace, currentUserId, userRole, onWorksp
       const res = await fetch(`/api/workspaces/${workspace.id}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim() }),
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -60,10 +61,20 @@ export function WorkspaceSettings({ workspace, currentUserId, userRole, onWorksp
         return;
       }
       setInviteEmail("");
+      setInviteRole("member");
       loadMembers();
     } finally {
       setInviting(false);
     }
+  }
+
+  async function handleRoleChange(memberId: string, newRole: string) {
+    await fetch(`/api/workspaces/${workspace.id}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    loadMembers();
   }
 
   async function handleRemove(memberId: string) {
@@ -105,7 +116,24 @@ export function WorkspaceSettings({ workspace, currentUserId, userRole, onWorksp
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[0.6rem] text-white/20 uppercase tracking-wider">{m.role}</span>
+                {isAdmin && m.user?.id !== currentUserId ? (
+                  <select
+                    value={m.role === "owner" ? "admin" : m.role}
+                    onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                    className="text-[0.6rem] px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-white/50 focus:outline-none focus:border-white/20 cursor-pointer"
+                  >
+                    <option value="member" className="bg-[#0c1120] text-white">member</option>
+                    <option value="admin" className="bg-[#0c1120] text-white">admin</option>
+                  </select>
+                ) : (
+                  <span className={`text-[0.6rem] px-1.5 py-0.5 rounded ${
+                    m.role === "admin" || m.role === "owner"
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                      : "bg-white/[0.06] text-white/30 border border-white/[0.08]"
+                  }`}>
+                    {m.role === "owner" ? "admin" : m.role}
+                  </span>
+                )}
                 {isAdmin && m.user?.id !== currentUserId && (
                   <button
                     onClick={() => handleRemove(m.id)}
@@ -135,6 +163,14 @@ export function WorkspaceSettings({ workspace, currentUserId, userRole, onWorksp
               placeholder="Email address"
               className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
             />
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white/80 focus:outline-none focus:border-white/20"
+            >
+              <option value="member" className="bg-[#0c1120] text-white">Member</option>
+              <option value="admin" className="bg-[#0c1120] text-white">Admin</option>
+            </select>
             <button
               type="submit"
               disabled={inviting}

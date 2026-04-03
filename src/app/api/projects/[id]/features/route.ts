@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(
   _req: NextRequest,
@@ -45,6 +46,18 @@ export async function POST(
       sortOrder: count,
     },
   });
+
+  const project = await prisma.project.findUnique({ where: { id }, select: { workspaceId: true } });
+  if (project) {
+    logActivity({
+      workspaceId: project.workspaceId,
+      projectId: id,
+      action: "feature_created",
+      category: "feature",
+      description: `Feature "${title}" created`,
+      metadata: { featureId: feature.id, featureTitle: title, parentId: parentId || null },
+    });
+  }
 
   return NextResponse.json(feature, { status: 201 });
 }

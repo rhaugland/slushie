@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readManifest, writeManifest, removeFeatureFromManifest } from "@/lib/manifest";
+import { logActivity } from "@/lib/activity";
 import path from "path";
 
 export async function PATCH(
@@ -39,5 +40,15 @@ export async function DELETE(
   }
 
   await prisma.feature.delete({ where: { id } });
+
+  logActivity({
+    workspaceId: feature.project.workspaceId,
+    projectId: feature.projectId,
+    action: "feature_deleted",
+    category: "feature",
+    description: `Feature "${feature.title}" deleted`,
+    metadata: { featureId: id, featureTitle: feature.title },
+  });
+
   return NextResponse.json({ ok: true });
 }

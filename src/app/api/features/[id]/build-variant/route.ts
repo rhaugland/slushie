@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(
   req: NextRequest,
@@ -11,7 +12,7 @@ export async function POST(
 
   const feature = await prisma.feature.findUnique({
     where: { id },
-    include: { variants: true },
+    include: { variants: true, project: { select: { workspaceId: true } } },
   });
 
   if (!feature) {
@@ -47,6 +48,15 @@ export async function POST(
       mode: "variant",
       userPrompt,
     },
+  });
+
+  logActivity({
+    workspaceId: feature.project.workspaceId,
+    projectId: feature.projectId,
+    action: "variant_created",
+    category: "variant",
+    description: `Variant created for "${feature.title}"`,
+    metadata: { featureId: id, featureTitle: feature.title, variantId: variant.id },
   });
 
   return NextResponse.json(variant, { status: 201 });

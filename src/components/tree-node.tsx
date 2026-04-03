@@ -18,6 +18,7 @@ type Props = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
+  onAddFeature?: (parentId: string) => void;
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -27,7 +28,7 @@ const STATUS_DOT: Record<string, string> = {
   error: "bg-red-400",
 };
 
-export function TreeNode({ feature, depth, selectedId, onSelect, onToggle }: Props) {
+export function TreeNode({ feature, depth, selectedId, onSelect, onToggle, onAddFeature }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = (feature.children ?? []).length > 0;
   const isSelected = feature.id === selectedId;
@@ -82,9 +83,9 @@ export function TreeNode({ feature, depth, selectedId, onSelect, onToggle }: Pro
         </button>
       </div>
 
-      {!collapsed && hasChildren && (
+      {!collapsed && (hasChildren || (!feature.parentId && onAddFeature)) && (
         <div>
-          {feature.children.map((child) => (
+          {(feature.children ?? []).map((child) => (
             <TreeNode
               key={child.id}
               feature={child}
@@ -94,6 +95,18 @@ export function TreeNode({ feature, depth, selectedId, onSelect, onToggle }: Pro
               onToggle={onToggle}
             />
           ))}
+          {!feature.parentId && onAddFeature && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddFeature(feature.id);
+              }}
+              className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors py-1"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
+              + Add feature
+            </button>
+          )}
         </div>
       )}
     </div>

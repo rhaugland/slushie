@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(
   _req: NextRequest,
@@ -44,7 +45,8 @@ export async function POST(
 
   const { id } = await params;
   const body = await req.json();
-  const { email, projectIds } = body;
+  const { email, projectIds, role: requestedRole } = body;
+  const memberRole = requestedRole === "admin" ? "admin" : "member";
 
   if (!email) {
     return NextResponse.json({ error: "email is required" }, { status: 400 });
@@ -56,6 +58,9 @@ export async function POST(
   const membership = user.memberships.find((m) => m.workspaceId === client.workspaceId);
   if (!membership) {
     return NextResponse.json({ error: "Not a member of this workspace" }, { status: 403 });
+  }
+  if (membership.role !== "admin" && membership.role !== "owner") {
+    return NextResponse.json({ error: "Only admins can add members" }, { status: 403 });
   }
 
   const targetUser = await prisma.user.findUnique({ where: { email } });
@@ -74,7 +79,12 @@ export async function POST(
     });
     if (!existingWorkspaceMember) {
       await prisma.workspaceMember.create({
-        data: { workspaceId: client.workspaceId, userId: targetUser.id, role: "member" },
+        data: { workspaceId: client.workspaceId, userId: targetUser.id, role: memberRole },
+      });
+    } else if (memberRole === "admin" && existingWorkspaceMember.role !== "admin") {
+      await prisma.workspaceMember.update({
+        where: { id: existingWorkspaceMember.id },
+        data: { role: "admin" },
       });
     }
 
@@ -82,6 +92,7 @@ export async function POST(
       data: {
         clientId: id,
         userId: targetUser.id,
+        role: memberRole,
         projectAccess: {
           create: (projectIds ?? []).map((projectId: string) => ({ projectId })),
         },
@@ -96,6 +107,16 @@ export async function POST(
       },
     });
 
+    logActivity({
+      workspaceId: client.workspaceId,
+      userId: user.id,
+      userName: user.name ?? undefined,
+      action: "member_added",
+      category: "team",
+      description: `Added ${targetUser.name || targetUser.email} to ${client.name}`,
+      metadata: { clientId: id, memberEmail: email, role: memberRole },
+    });
+
     return NextResponse.json(member, { status: 201 });
   }
 
@@ -104,6 +125,7 @@ export async function POST(
     data: {
       clientId: id,
       invitedEmail: email,
+      role: memberRole,
       projectAccess: {
         create: (projectIds ?? []).map((projectId: string) => ({ projectId })),
       },
@@ -116,6 +138,16 @@ export async function POST(
         },
       },
     },
+  });
+
+  logActivity({
+    workspaceId: client.workspaceId,
+    userId: user.id,
+    userName: user.name ?? undefined,
+    action: "member_invited",
+    category: "team",
+    description: `Invited ${email} to ${client.name}`,
+    metadata: { clientId: id, memberEmail: email, role: memberRole },
   });
 
   return NextResponse.json(member, { status: 201 });

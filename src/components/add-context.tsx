@@ -4,7 +4,7 @@ import { useState, useRef, DragEvent } from "react";
 import { CodebaseMapper } from "./codebase-mapper";
 
 type Props = {
-  projects: { id: string; name: string; clientName: string; clientFirm: string }[];
+  projects: { id: string; name: string; clientName: string }[];
   onUpdate: () => void;
   onProjectSelected: (id: string) => void;
 };

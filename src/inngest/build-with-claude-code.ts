@@ -1,5 +1,6 @@
 import { inngest } from "./client";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity";
 import { spawn, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -37,7 +38,8 @@ function commitCurrent(projectDir: string, message: string): void {
   } catch { /* no-op if nothing to commit */ }
 }
 
-function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; tokensUsed: number; durationMs: number }> {
+  const startTime = Date.now();
   return new Promise((resolve) => {
     // Filter out env vars that make Claude Code think it's nested
     const cleanEnv = Object.fromEntries(
@@ -45,6 +47,7 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
     );
     const child = spawn("claude", [
       "--print",
+      "--output-format", "json",
       "-p", prompt,
       "--allowedTools", "Edit,Write,Read,Bash,Glob,Grep",
     ], {
@@ -61,11 +64,25 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
     child.stderr.on("data", (data) => { stderr += data.toString(); });
 
     child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code ?? 1 });
+      const durationMs = Date.now() - startTime;
+      let tokensUsed = 0;
+      try {
+        const parsed = JSON.parse(stdout);
+        if (parsed?.usage?.total_tokens) {
+          tokensUsed = parsed.usage.total_tokens;
+        } else if (parsed?.usage?.input_tokens && parsed?.usage?.output_tokens) {
+          tokensUsed = parsed.usage.input_tokens + parsed.usage.output_tokens;
+        }
+        // Extract the actual result text if JSON format
+        if (parsed?.result) {
+          stdout = parsed.result;
+        }
+      } catch { /* not JSON, keep raw stdout */ }
+      resolve({ stdout, stderr, exitCode: code ?? 1, tokensUsed, durationMs });
     });
 
     child.on("error", (err) => {
-      resolve({ stdout, stderr: stderr + "\n" + err.message, exitCode: 1 });
+      resolve({ stdout, stderr: stderr + "\n" + err.message, exitCode: 1, tokensUsed: 0, durationMs: Date.now() - startTime });
     });
   });
 }
@@ -113,6 +130,7 @@ export const buildWithClaudeCode = inngest.createFunction(
         featureRoute: feature.route,
         projectDir,
         projectName: feature.project.name,
+        workspaceId: feature.project.workspaceId,
         siblings,
       };
     });
@@ -127,6 +145,10 @@ export const buildWithClaudeCode = inngest.createFunction(
       : null;
 
     const buildDir = await step.run("setup-git", async () => {
+      // Ensure preview directory exists
+      if (!fs.existsSync(context.projectDir)) {
+        fs.mkdirSync(context.projectDir, { recursive: true });
+      }
       ensureGit(context.projectDir);
       commitCurrent(context.projectDir, "auto: save current state");
 
@@ -238,6 +260,8 @@ Look at the existing codebase structure first, then implement this feature.
             generatedCode: {},
             status: success ? "complete" : "failed",
             buildLogs: logs,
+            tokensUsed: result.tokensUsed || 0,
+            durationMs: result.durationMs || 0,
           },
         });
       } else if (variantId) {
@@ -250,6 +274,17 @@ Look at the existing codebase structure first, then implement this feature.
           },
         });
       }
+
+      logActivity({
+        workspaceId: context.workspaceId,
+        projectId,
+        userId: undefined,
+        userName: "Claude Code",
+        action: success ? "build_completed" : "build_failed",
+        category: "build",
+        description: `Build ${success ? "completed" : "failed"} for "${context.featureTitle}"`,
+        metadata: { featureId: featureId, tokensUsed: result.tokensUsed, durationMs: result.durationMs },
+      });
     });
 
     return { featureId, variantId, mode, exitCode: result.exitCode };

@@ -147,6 +147,8 @@ model FeatureBuild {
   generatedCode Json
   buildLogs     String?  @db.Text
   status        String   @default("queued") // queued | generating | complete | failed
+  tokensUsed    Int      @default(0)
+  durationMs    Int      @default(0)
   createdAt     DateTime @default(now())
   feature       Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
 
@@ -164,6 +166,24 @@ model Meeting {
   suggestions MeetingSuggestion[]
 
   @@index([projectId])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  projectId   String?
+  userId      String?
+  userName    String?
+  action      String   // build_started, build_completed, build_failed, feature_toggled, variant_added, member_added, role_changed, feature_created, feature_deleted, etc.
+  category    String   @default("general") // build, feature, team, variant
+  description String
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([category])
+  @@index([createdAt])
 }
 
 model MeetingSuggestion {

@@ -43,9 +43,12 @@ type Props = {
   onClientSettings: (clientId: string) => void;
   onProjectSettings: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
+  onRenameClient: (clientId: string, name: string) => void;
   onCreateWorkspace: (name: string) => Promise<string | null>;
   onRefresh: () => void;
   onLogout: () => void;
+  onTeam: () => void;
+  teamActive?: boolean;
 };
 
 // SVG icon helpers
@@ -160,9 +163,12 @@ export function ProjectSidebar({
   onClientSettings,
   onProjectSettings,
   onRenameProject,
+  onRenameClient,
   onCreateWorkspace,
   onRefresh,
   onLogout,
+  onTeam,
+  teamActive,
 }: Props) {
   const [showWsForm, setShowWsForm] = useState(false);
   const [wsName, setWsName] = useState("");
@@ -177,6 +183,7 @@ export function ProjectSidebar({
 
   // Per-client: confirm delete state
   const [confirmDeleteClientId, setConfirmDeleteClientId] = useState<string | null>(null);
+  const [workflowsOpen, setWorkflowsOpen] = useState(true);
 
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
@@ -198,8 +205,25 @@ export function ProjectSidebar({
         </button>
       </div>
 
+      {/* Workflows header */}
+      <button
+        onClick={() => setWorkflowsOpen(!workflowsOpen)}
+        className="flex items-center justify-between w-full mb-3 px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span className="text-[0.6rem] uppercase tracking-widest">Workflows</span>
+        </div>
+        <span className="text-[0.6rem]">{workflowsOpen ? "-" : "+"}</span>
+      </button>
+
       {/* Workspace list */}
-      <div className="flex-1 overflow-y-auto space-y-6">
+      <div className={`flex-1 overflow-y-auto space-y-6 ${workflowsOpen ? "" : "hidden"}`}>
         {workspaces.map((membership) => {
           const ws = membership.workspace;
           return (
@@ -251,9 +275,12 @@ export function ProjectSidebar({
                         </div>
                       ) : (
                         <div className="flex items-center justify-between mb-1 group/client">
-                          <span className="text-[0.55rem] uppercase tracking-widest text-white/30 truncate">
-                            {client.name}
-                          </span>
+                          <EditableText
+                            value={client.name}
+                            onSave={(name) => onRenameClient(client.id, name)}
+                            className="text-[0.55rem] uppercase tracking-widest text-white/30 truncate"
+                            inputClassName="text-[0.55rem] uppercase text-white/50"
+                          />
                           <div className="flex items-center gap-0.5 opacity-0 group-hover/client:opacity-100 transition-opacity shrink-0">
                             <button
                               onClick={() => onClientSettings(client.id)}
@@ -391,13 +418,43 @@ export function ProjectSidebar({
         )}
       </div>
 
+      {/* Team */}
+      <button
+        onClick={onTeam}
+        className={`mt-4 w-full px-3 py-2 text-xs rounded-lg transition-colors flex items-center gap-2 ${
+          teamActive
+            ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
+            : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+        }`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        Team
+      </button>
+
+      {/* Changelog */}
+      <a
+        href="/changelog"
+        className="mt-4 w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors flex items-center gap-2"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+        Changelog
+      </a>
+
       {/* Log out */}
       <button
         onClick={onLogout}
-        className="mt-4 w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors"
+        className="mt-2 w-full px-3 py-2 text-xs rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
       >
         Log out
       </button>
     </aside>
   );
 }
+

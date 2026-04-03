@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readManifest, writeManifest, toggleFeatureInManifest } from "@/lib/manifest";
+import { logActivity } from "@/lib/activity";
 import path from "path";
 
 export async function POST(
@@ -42,6 +43,15 @@ export async function POST(
 
   // Minor features: the DB flag is enough — the preview proxy checks
   // enabled state at runtime and blocks disabled feature routes.
+
+  logActivity({
+    workspaceId: feature.project.workspaceId,
+    projectId: feature.projectId,
+    action: feature.enabled ? "feature_toggled_on" : "feature_toggled_off",
+    category: "feature",
+    description: `"${feature.title}" toggled ${feature.enabled ? "on" : "off"}`,
+    metadata: { featureId: id, featureTitle: feature.title, enabled: feature.enabled },
+  });
 
   return NextResponse.json(feature);
 }

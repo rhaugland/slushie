@@ -7,6 +7,7 @@ type Member = {
   id: string;
   name: string | null;
   email: string;
+  role: string;
   projectIds: string[];
 };
 
@@ -24,6 +25,7 @@ export function ClientSettings({ client, projects, currentUserId, onUpdate }: Pr
 
   // Add member form state
   const [addEmail, setAddEmail] = useState("");
+  const [addRole, setAddRole] = useState<string>("member");
   const [addProjectIds, setAddProjectIds] = useState<string[]>([]);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
@@ -76,13 +78,14 @@ export function ClientSettings({ client, projects, currentUserId, onUpdate }: Pr
       const res = await fetch(`/api/clients/${client.id}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: addEmail.trim(), projectIds: addProjectIds }),
+        body: JSON.stringify({ email: addEmail.trim(), projectIds: addProjectIds, role: addRole }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to add member");
       }
       setAddEmail("");
+      setAddRole("member");
       setAddProjectIds([]);
       await loadMembers();
       onUpdate();
@@ -104,6 +107,16 @@ export function ClientSettings({ client, projects, currentUserId, onUpdate }: Pr
       await loadMembers();
       onUpdate();
     }
+  }
+
+  async function handleRoleChange(memberId: string, newRole: string) {
+    await fetch(`/api/clients/${client.id}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    await loadMembers();
+    onUpdate();
   }
 
   function startEditAccess(member: Member) {
@@ -177,10 +190,20 @@ export function ClientSettings({ client, projects, currentUserId, onUpdate }: Pr
               className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2"
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-white/70 truncate">
-                    {member.name || member.email}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-white/70 truncate">
+                      {member.name || member.email}
+                    </p>
+                    <select
+                      value={member.role || "member"}
+                      onChange={(e) => handleRoleChange(member.id, e.target.value)}
+                      className="text-[0.55rem] px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-white/50 focus:outline-none focus:border-white/20 cursor-pointer"
+                    >
+                      <option value="member" className="bg-[#0c1120] text-white">member</option>
+                      <option value="admin" className="bg-[#0c1120] text-white">admin</option>
+                    </select>
+                  </div>
                   {member.name && (
                     <p className="text-[0.6rem] text-white/30 truncate">{member.email}</p>
                   )}
@@ -267,13 +290,23 @@ export function ClientSettings({ client, projects, currentUserId, onUpdate }: Pr
       {/* Add member form */}
       <form onSubmit={handleAddMember} className="space-y-2 pt-2 border-t border-white/[0.06]">
         <p className="text-[0.6rem] uppercase tracking-widest text-white/30">Add member</p>
-        <input
-          value={addEmail}
-          onChange={(e) => setAddEmail(e.target.value)}
-          placeholder="Email address"
-          type="email"
-          className="w-full bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
-        />
+        <div className="flex gap-2">
+          <input
+            value={addEmail}
+            onChange={(e) => setAddEmail(e.target.value)}
+            placeholder="Email address"
+            type="email"
+            className="flex-1 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
+          />
+          <select
+            value={addRole}
+            onChange={(e) => setAddRole(e.target.value)}
+            className="bg-white/[0.04] border border-white/[0.08] rounded px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-white/20"
+          >
+            <option value="member" className="bg-[#0c1120] text-white">Member</option>
+            <option value="admin" className="bg-[#0c1120] text-white">Admin</option>
+          </select>
+        </div>
         {projects.length > 0 && (
           <div className="space-y-1">
             <p className="text-[0.6rem] text-white/30">Project access</p>

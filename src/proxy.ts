@@ -5,7 +5,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "slushie-machine-dev-secret-change-in-prod"
 );
 
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth/login", "/api/auth/signup"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth/login", "/api/auth/signup", "/api/inngest"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

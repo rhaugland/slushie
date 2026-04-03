@@ -2,6 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; memberId: string }> }
+) {
+  const { id, memberId } = await params;
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const membership = user.memberships.find((m) => m.workspaceId === id);
+  if (!membership || !["admin", "owner"].includes(membership.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { role } = await req.json();
+  if (role !== "admin" && role !== "member") {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
+  const target = await prisma.workspaceMember.findUnique({ where: { id: memberId } });
+  if (!target || target.workspaceId !== id) {
+    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  }
+  if (target.userId === user.id) {
+    return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
+  }
+
+  const updated = await prisma.workspaceMember.update({
+    where: { id: memberId },
+    data: { role },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; memberId: string }> }
@@ -11,7 +46,7 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const membership = user.memberships.find((m) => m.workspaceId === id);
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
+  if (!membership || !["admin", "owner"].includes(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

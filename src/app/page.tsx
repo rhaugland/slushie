@@ -6,13 +6,15 @@ import { ProjectSidebar } from "@/components/project-sidebar";
 import { ProjectTree } from "@/components/project-tree";
 import { ContextPane } from "@/components/context-pane";
 import { AddContext } from "@/components/add-context";
+import { PaneTeam } from "@/components/pane-team";
 
 type Selection =
   | { type: "project" }
   | { type: "feature"; id: string }
   | { type: "meeting"; id: string }
   | { type: "workspace-settings"; workspaceId: string }
-  | { type: "client-settings"; clientId: string };
+  | { type: "client-settings"; clientId: string }
+  | { type: "team" };
 
 export default function Home() {
   const router = useRouter();
@@ -23,6 +25,7 @@ export default function Home() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [middleCollapsed, setMiddleCollapsed] = useState(false);
   const [previewMode, setPreviewMode] = useState<"collapsed" | "half" | "full">("collapsed");
+  const [autoOpenAddFeature, setAutoOpenAddFeature] = useState(false);
 
   const loadUser = useCallback(async () => {
     const res = await fetch("/api/auth/me", { cache: "no-store" });
@@ -82,6 +85,12 @@ export default function Home() {
   }
 
   async function handleAddFeature(parentId: string | null) {
+    if (parentId) {
+      // Select the parent feature and signal to open the add form
+      setSelection({ type: "feature", id: parentId });
+      setAutoOpenAddFeature(true);
+      return;
+    }
     const title = prompt("Feature name:");
     if (!title) return;
     const description = prompt("Short description:") || title;
@@ -101,8 +110,17 @@ export default function Home() {
 
   const workspaces = user?.memberships || [];
 
+  // Check if user is admin in any workspace that contains the current project's workspace
+  function isAdminForWorkspace(workspaceId?: string): boolean {
+    const isAdmin = (m: any) => m.role === "admin" || m.role === "owner";
+    if (!workspaceId) return workspaces.some(isAdmin);
+    return workspaces.some((m: any) => m.workspaceId === workspaceId && isAdmin(m));
+  }
+
   const allProjects = workspaces.flatMap((m: any) =>
-    m.workspace.clients.flatMap((c: any) => c.projects)
+    m.workspace.clients.flatMap((c: any) =>
+      c.projects.map((p: any) => ({ ...p, clientName: c.name }))
+    )
   );
 
   return (
@@ -157,6 +175,14 @@ export default function Home() {
               setProject(null);
               setSelection({ type: "client-settings", clientId });
             }}
+            onRenameClient={async (clientId, name) => {
+              await fetch(`/api/clients/${clientId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+              });
+              loadUser();
+            }}
             onRenameProject={async (projectId, name) => {
               await fetch(`/api/projects/${projectId}`, {
                 method: "PATCH",
@@ -187,6 +213,12 @@ export default function Home() {
               setSelection({ type: "workspace-settings", workspaceId });
             }}
             onLogout={handleLogout}
+            onTeam={() => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "team" });
+            }}
+            teamActive={selection.type === "team"}
           />
         )
       )}
@@ -227,6 +259,11 @@ export default function Home() {
                   loadUser();
                   loadProject(project.id);
                 }}
+                onTeamUpdate={() => {
+                  if (selectedProjectId) loadProject(selectedProjectId);
+                  loadUser();
+                }}
+                isAdmin={isAdminForWorkspace(project?.workspaceId)}
               />
             )
           )}
@@ -244,6 +281,9 @@ export default function Home() {
                 workspaces={workspaces}
                 currentUserId={user?.id}
                 onOpenPreview={() => setPreviewMode("half")}
+                isAdmin={isAdminForWorkspace(project?.workspaceId)}
+                autoOpenAddFeature={autoOpenAddFeature}
+                onAutoOpenAddFeatureConsumed={() => setAutoOpenAddFeature(false)}
               />
             </main>
           )}
@@ -320,6 +360,14 @@ export default function Home() {
             </div>
           )}
         </>
+      ) : selection.type === "team" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <PaneTeam
+            workspaces={workspaces}
+            onUpdate={() => loadUser()}
+            isAdmin={isAdminForWorkspace()}
+          />
+        </main>
       ) : selection.type === "workspace-settings" || selection.type === "client-settings" ? (
         <main className="flex-1 p-6 overflow-y-auto">
           <ContextPane
