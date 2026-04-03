@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 
 function run(cmd: string, cwd: string): string {
-  return execSync(cmd, { cwd, encoding: "utf-8", timeout: 15000 }).trim();
+  return execSync(cmd, { cwd, encoding: "utf-8", timeout: 15000, shell: "/bin/bash" }).trim();
 }
 
 /** Ensure preview dir has a git repo with a baseline commit on main. */
@@ -55,6 +55,7 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
       timeout: 600000, // 10 min
       stdio: ["ignore", "pipe", "pipe"],
       env: cleanEnv,
+      shell: "/bin/bash",
     });
 
     let stdout = "";
