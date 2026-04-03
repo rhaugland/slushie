@@ -6,11 +6,45 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime          @default(now())
+  memberships  WorkspaceMember[]
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+  projects  Project[]
+}
+
+model WorkspaceMember {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  userId       String?
+  invitedEmail String?
+  role         String    @default("member") // owner | admin | member
+  createdAt    DateTime  @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([invitedEmail])
+}
+
 model Project {
   id           String    @id @default(cuid())
   name         String
   clientName   String
-  clientFirm   String    // "w3" | "isotropic"
+  workspaceId  String
   themeConfig  Json      @default("{}")
   baseVersion  String    @default("1.0.0")
   manifestJson Json      @default("{\"features\":[]}")
@@ -18,8 +52,11 @@ model Project {
   deployStatus String    @default("stopped") // stopped | starting | running | error
   port         Int?
   createdAt    DateTime  @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   features     Feature[]
   meetings     Meeting[]
+
+  @@index([workspaceId])
 }
 
 model Feature {
@@ -38,9 +75,24 @@ model Feature {
   parent      Feature?       @relation("FeatureTree", fields: [parentId], references: [id], onDelete: Cascade)
   children    Feature[]      @relation("FeatureTree")
   builds      FeatureBuild[]
+  variants    Variant[]
 
   @@index([projectId])
   @@index([parentId])
+}
+
+model Variant {
+  id          String   @id @default(cuid())
+  featureId   String
+  label       String   @default("Variant")
+  isMain      Boolean  @default(false)
+  status      String   @default("draft") // draft | building | live | error
+  buildLogs   String?  @db.Text
+  buildOutput String?  @db.Text
+  createdAt   DateTime @default(now())
+  feature     Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@index([featureId])
 }
 
 model FeatureBuild {

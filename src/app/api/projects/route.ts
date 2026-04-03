@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const workspaceIds = user.memberships.map((m) => m.workspaceId);
+
   const projects = await prisma.project.findMany({
+    where: { workspaceId: { in: workspaceIds } },
     include: {
       features: {
         include: { children: true, builds: { take: 1, orderBy: { createdAt: "desc" } } },
@@ -17,18 +24,23 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { name, clientName, clientFirm } = body;
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!name || !clientName || !clientFirm) {
-    return NextResponse.json({ error: "name, clientName, clientFirm required" }, { status: 400 });
+  const body = await req.json();
+  const { name, clientName, workspaceId } = body;
+
+  if (!name || !clientName || !workspaceId) {
+    return NextResponse.json({ error: "name, clientName, workspaceId required" }, { status: 400 });
   }
-  if (!["w3", "isotropic"].includes(clientFirm)) {
-    return NextResponse.json({ error: "clientFirm must be w3 or isotropic" }, { status: 400 });
+
+  const membership = user.memberships.find((m) => m.workspaceId === workspaceId);
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member of this workspace" }, { status: 403 });
   }
 
   const project = await prisma.project.create({
-    data: { name, clientName, clientFirm },
+    data: { name, clientName, workspaceId },
   });
 
   const { inngest } = await import("@/inngest/client");

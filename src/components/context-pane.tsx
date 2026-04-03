@@ -3,19 +3,42 @@
 import { PaneProject } from "./pane-project";
 import { PaneFeature } from "./pane-feature";
 import { PaneMeeting } from "./pane-meeting";
+import { WorkspaceSettings } from "./workspace-settings";
 
 type Selection =
   | { type: "project" }
   | { type: "feature"; id: string }
-  | { type: "meeting"; id: string };
+  | { type: "meeting"; id: string }
+  | { type: "workspace-settings"; workspaceId: string };
+
+type WorkspaceMembership = {
+  workspaceId: string;
+  role: string;
+  workspace: { id: string; name: string; slug: string };
+};
 
 type Props = {
   project: any;
   selection: Selection;
   onUpdate: () => void;
+  workspaces?: WorkspaceMembership[];
+  currentUserId?: string;
 };
 
-export function ContextPane({ project, selection, onUpdate }: Props) {
+export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId }: Props) {
+  if (selection.type === "workspace-settings") {
+    const membership = workspaces?.find((m) => m.workspaceId === selection.workspaceId);
+    if (!membership || !currentUserId) return null;
+    return (
+      <WorkspaceSettings
+        workspace={membership.workspace}
+        currentUserId={currentUserId}
+        userRole={membership.role}
+        onWorkspaceRenamed={onUpdate}
+      />
+    );
+  }
+
   if (selection.type === "project") {
     return <PaneProject project={project} onUpdate={onUpdate} />;
   }
@@ -28,7 +51,6 @@ export function ContextPane({ project, selection, onUpdate }: Props) {
     const feature = allFeatures.find((f: any) => f.id === selection.id);
     if (!feature) return <p className="text-white/30 text-sm">Feature not found.</p>;
 
-    // For minor features, find the parent to derive the preview route
     const parentFeature = feature.parentId
       ? project.features.find((f: any) => f.id === feature.parentId)
       : null;

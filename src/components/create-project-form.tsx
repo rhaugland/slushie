@@ -3,24 +3,25 @@
 import { useState } from "react";
 
 type Props = {
+  workspaces: { id: string; name: string; slug: string }[];
   onCreated: () => void;
   onCancel: () => void;
 };
 
-export function CreateProjectForm({ onCreated, onCancel }: Props) {
+export function CreateProjectForm({ workspaces, onCreated, onCancel }: Props) {
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
-  const [firm, setFirm] = useState<"w3" | "isotropic">("w3");
+  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !clientName.trim()) return;
+    if (!name.trim() || !clientName.trim() || !workspaceId) return;
     setLoading(true);
     await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, clientName, clientFirm: firm }),
+      body: JSON.stringify({ name, clientName, workspaceId }),
     });
     setLoading(false);
     onCreated();
@@ -40,24 +41,17 @@ export function CreateProjectForm({ onCreated, onCancel }: Props) {
         placeholder="Client name"
         className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20"
       />
-      <div className="flex gap-2">
-        {(["w3", "isotropic"] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFirm(f)}
-            className={`flex-1 text-[0.6rem] py-1 rounded border transition-colors ${
-              firm === f
-                ? f === "w3"
-                  ? "border-red-500/30 bg-red-500/10 text-red-400"
-                  : "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                : "border-white/10 text-white/30"
-            }`}
-          >
-            {f}
-          </button>
+      <select
+        value={workspaceId}
+        onChange={(e) => setWorkspaceId(e.target.value)}
+        className="w-full bg-transparent border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-white/20"
+      >
+        {workspaces.map((ws) => (
+          <option key={ws.id} value={ws.id} className="bg-[#0c1120] text-white">
+            {ws.name}
+          </option>
         ))}
-      </div>
+      </select>
       <div className="flex gap-2">
         <button
           type="submit"

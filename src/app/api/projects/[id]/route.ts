@@ -18,7 +18,10 @@ export async function GET(
       features: {
         include: {
           children: {
-            include: { builds: { take: 1, orderBy: { createdAt: "desc" } } },
+            include: {
+              builds: { take: 1, orderBy: { createdAt: "desc" } },
+              variants: { orderBy: { createdAt: "desc" } },
+            },
             orderBy: { sortOrder: "asc" },
           },
           builds: { take: 1, orderBy: { createdAt: "desc" } },
@@ -44,7 +47,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const allowed = ["name", "clientName", "clientFirm", "themeConfig"];
+  const allowed = ["name", "clientName", "themeConfig"];
   const data: Record<string, unknown> = {};
   for (const key of allowed) {
     if (body[key] !== undefined) data[key] = body[key];

@@ -7,10 +7,20 @@ type Project = {
   id: string;
   name: string;
   clientName: string;
-  clientFirm: string;
+  workspaceId: string;
   deployUrl: string | null;
   deployStatus: string;
   features: { id: string; status: string }[];
+};
+
+type WorkspaceMembership = {
+  workspaceId: string;
+  role: string;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+  };
 };
 
 function ProjectItem({
@@ -88,18 +98,28 @@ function ProjectItem({
 
 type Props = {
   projects: Project[];
+  workspaces: WorkspaceMembership[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onProjectCreated: () => void;
   onDeleteProject: (id: string) => void;
   onCollapse: () => void;
+  onWorkspaceSettings: (workspaceId: string) => void;
+  onLogout: () => void;
 };
 
-export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreated, onDeleteProject, onCollapse }: Props) {
+export function ProjectSidebar({
+  projects,
+  workspaces,
+  selectedId,
+  onSelect,
+  onProjectCreated,
+  onDeleteProject,
+  onCollapse,
+  onWorkspaceSettings,
+  onLogout,
+}: Props) {
   const [showForm, setShowForm] = useState(false);
-
-  const w3 = projects.filter((p) => p.clientFirm === "w3");
-  const iso = projects.filter((p) => p.clientFirm === "isotropic");
 
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
@@ -129,6 +149,7 @@ export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreate
 
       {showForm && (
         <CreateProjectForm
+          workspaces={workspaces.map((m) => m.workspace)}
           onCreated={() => {
             setShowForm(false);
             onProjectCreated();
@@ -138,39 +159,50 @@ export function ProjectSidebar({ projects, selectedId, onSelect, onProjectCreate
       )}
 
       <div className="flex-1 overflow-y-auto space-y-4">
-        {w3.length > 0 && (
-          <div>
-            <div className="text-[0.6rem] uppercase tracking-widest text-red-400/60 mb-2">w3</div>
-            <div className="space-y-1">
-              {w3.map((p) => (
-                <ProjectItem
-                  key={p.id}
-                  project={p}
-                  isSelected={p.id === selectedId}
-                  onSelect={() => onSelect(p.id)}
-                  onDelete={() => onDeleteProject(p.id)}
-                />
-              ))}
+        {workspaces.map((membership) => {
+          const wsProjects = projects.filter((p) => p.workspaceId === membership.workspace.id);
+          return (
+            <div key={membership.workspace.id}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[0.6rem] uppercase tracking-widest text-white/40">
+                  {membership.workspace.name}
+                </div>
+                <button
+                  onClick={() => onWorkspaceSettings(membership.workspace.id)}
+                  className="text-white/20 hover:text-white/40 transition-colors p-0.5"
+                  title="Workspace settings"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-1">
+                {wsProjects.map((p) => (
+                  <ProjectItem
+                    key={p.id}
+                    project={p}
+                    isSelected={p.id === selectedId}
+                    onSelect={() => onSelect(p.id)}
+                    onDelete={() => onDeleteProject(p.id)}
+                  />
+                ))}
+                {wsProjects.length === 0 && (
+                  <p className="text-[0.6rem] text-white/15 px-3 py-1">No projects yet</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        {iso.length > 0 && (
-          <div>
-            <div className="text-[0.6rem] uppercase tracking-widest text-blue-400/60 mb-2">isotropic</div>
-            <div className="space-y-1">
-              {iso.map((p) => (
-                <ProjectItem
-                  key={p.id}
-                  project={p}
-                  isSelected={p.id === selectedId}
-                  onSelect={() => onSelect(p.id)}
-                  onDelete={() => onDeleteProject(p.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+          );
+        })}
       </div>
+
+      <button
+        onClick={onLogout}
+        className="mt-4 w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors"
+      >
+        Log out
+      </button>
     </aside>
   );
 }
