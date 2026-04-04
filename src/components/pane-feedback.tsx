@@ -51,9 +51,10 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
   const [items, setItems] = useState<FeedbackItemData[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [embedCode, setEmbedCode] = useState<string | null>(null);
-  const [showEmbed, setShowEmbed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [embedCodes, setEmbedCodes] = useState<Record<string, string>>({});
+  const [projectFeedbackCounts, setProjectFeedbackCounts] = useState<Record<string, number>>({});
+  const [showEmbedCards, setShowEmbedCards] = useState(false);
+  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
   const [movingItem, setMovingItem] = useState<FeedbackItemData | null>(null);
 
   const selectedProject = allProjects.find((p) => p.id === selectedProjectId);
@@ -73,8 +74,6 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
 
   useEffect(() => {
     loadItems();
-    setEmbedCode(null);
-    setShowEmbed(false);
   }, [loadItems]);
 
   // Poll while any items are pending
@@ -85,22 +84,30 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
     return () => clearInterval(interval);
   }, [items, loadItems]);
 
-  async function loadEmbedCode() {
-    if (!selectedProjectId) return;
-    const res = await fetch(`/api/projects/${selectedProjectId}/embed-key`);
-    if (res.ok) {
-      const data = await res.json();
-      setEmbedCode(data.embedCode);
-      setShowEmbed(true);
-    }
-  }
+  // Load embed codes and feedback counts for all projects when cards are shown
+  useEffect(() => {
+    if (!showEmbedCards) return;
+    allProjects.forEach(async (p) => {
+      if (!embedCodes[p.id]) {
+        const res = await fetch(`/api/projects/${p.id}/embed-key`);
+        if (res.ok) {
+          const data = await res.json();
+          setEmbedCodes((prev) => ({ ...prev, [p.id]: data.embedCode }));
+        }
+      }
+      const res = await fetch(`/api/feedback?projectId=${p.id}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setProjectFeedbackCounts((prev) => ({ ...prev, [p.id]: data.length }));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showEmbedCards]);
 
-  function copyEmbed() {
-    if (embedCode) {
-      navigator.clipboard.writeText(embedCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  function copyEmbed(projectId: string, code: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedProjectId(projectId);
+    setTimeout(() => setCopiedProjectId(null), 2000);
   }
 
   async function handleDismiss(id: string) {
@@ -130,12 +137,52 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-[#f1f5f9]">Feedback</h1>
         <button
-          onClick={() => showEmbed ? setShowEmbed(false) : loadEmbedCode()}
+          onClick={() => setShowEmbedCards(!showEmbedCards)}
           className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
         >
-          {showEmbed ? "Hide Embed" : "Get Embed Code"}
+          {showEmbedCards ? "Hide Widgets" : "Embed Widgets"}
         </button>
       </div>
+
+      {/* Embed code cards — one per project */}
+      {showEmbedCards && (
+        <div className="mb-6 space-y-2">
+          {allProjects.map((p) => {
+            const code = embedCodes[p.id];
+            const count = projectFeedbackCounts[p.id] ?? 0;
+            const isActive = count > 0;
+            return (
+              <div key={p.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-white/70">{p.clientName} / {p.name}</span>
+                    {isActive ? (
+                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-400 font-medium">Active</span>
+                    ) : (
+                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/[0.04] text-white/25 font-medium">Not installed</span>
+                    )}
+                  </div>
+                  {code && (
+                    <button
+                      onClick={() => copyEmbed(p.id, code)}
+                      className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors shrink-0"
+                    >
+                      {copiedProjectId === p.id ? "Copied!" : "Copy"}
+                    </button>
+                  )}
+                </div>
+                {code ? (
+                  <code className="block text-[0.65rem] text-blue-400/70 bg-white/[0.03] px-3 py-2 rounded-md break-all leading-relaxed">
+                    {code}
+                  </code>
+                ) : (
+                  <div className="text-[0.6rem] text-white/20">Loading...</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Project selector */}
       <div className="mb-4">
@@ -151,25 +198,6 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
           ))}
         </select>
       </div>
-
-      {/* Embed code section */}
-      {showEmbed && embedCode && (
-        <div className="mb-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 space-y-2">
-          <div className="text-[0.6rem] uppercase tracking-widest text-white/30">Embed Code</div>
-          <div className="text-xs text-white/40 mb-1">Add this script tag to your app's HTML:</div>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs text-blue-400 bg-white/[0.04] px-3 py-2 rounded-lg break-all">
-              {embedCode}
-            </code>
-            <button
-              onClick={copyEmbed}
-              className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors shrink-0"
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Content */}
       {loading && items.length === 0 ? (
