@@ -251,12 +251,13 @@ model FeedbackItem {
   status         String   @default("pending") // pending | reviewed | dismissed
   wishlistItemId String?
   clientMemberId String?
-  clientMember   ClientMember? @relation(fields: [clientMemberId], references: [id])
+  clientMember   ClientMember? @relation(fields: [clientMemberId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([status])
+  @@index([clientMemberId])
 }
 
 model WishlistVote {
