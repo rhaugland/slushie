@@ -5,7 +5,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "slushie-machine-dev-secret-change-in-prod"
 );
 
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth/login", "/api/auth/signup", "/api/inngest"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth/login", "/api/auth/signup", "/api/inngest", "/portal", "/api/portal/login"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -17,6 +17,11 @@ export async function proxy(req: NextRequest) {
 
   // Allow preview API (has its own auth model)
   if (pathname.startsWith("/api/preview")) {
+    return NextResponse.next();
+  }
+
+  // Allow public feedback widget endpoint (authenticated by API key, not session)
+  if (pathname === "/api/feedback" && req.method === "POST") {
     return NextResponse.next();
   }
 
