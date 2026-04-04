@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { LiveMeeting } from "./live-meeting";
 
+type Suggestion = {
+  id: string;
+  suggestedTitle: string;
+  suggestedDescription: string;
+  suggestedPriority: string | null;
+  status: string;
+};
+
 type MeetingNote = {
   id: string;
   type: string;
@@ -14,8 +22,10 @@ type MeetingNote = {
   imageUrl: string | null;
   createdAt: string;
   project: { id: string; name: string } | null;
-  suggestions: { id: string; suggestedTitle: string; status: string }[];
+  suggestions: Suggestion[];
   wishlistItems: { id: string; status: string }[];
+  clientId: string | null;
+  projectId: string | null;
 };
 
 type WorkspaceMembership = {
@@ -258,6 +268,7 @@ export function PaneNotes({ workspaces }: Props) {
                 await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
                 loadNotes();
               }}
+              onReload={loadNotes}
             />
           ))}
         </div>
@@ -268,14 +279,45 @@ export function PaneNotes({ workspaces }: Props) {
   );
 }
 
-function NoteCard({ note, expanded, onToggle, onDelete }: {
+function NoteCard({ note, expanded, onToggle, onDelete, onReload }: {
   note: MeetingNote;
   expanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onReload: () => void;
 }) {
   const isProcessing = ["uploading", "transcribing", "extracting"].includes(note.status);
-  const featureCount = note.wishlistItems.length;
+  const featureCount = note.suggestions.filter((s) => s.status === "pending").length;
+
+  async function handleAddToWishlist(suggestion: Suggestion) {
+    if (!note.clientId) return;
+    await fetch("/api/wishlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: suggestion.suggestedTitle,
+        description: suggestion.suggestedDescription,
+        clientId: note.clientId,
+        projectId: note.projectId,
+        priority: suggestion.suggestedPriority,
+      }),
+    });
+    await fetch(`/api/suggestions/${suggestion.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "accepted" }),
+    });
+    onReload();
+  }
+
+  async function handleDismissSuggestion(suggestionId: string) {
+    await fetch(`/api/suggestions/${suggestionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "dismissed" }),
+    });
+    onReload();
+  }
 
   return (
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
@@ -308,8 +350,8 @@ function NoteCard({ note, expanded, onToggle, onDelete }: {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {featureCount > 0 && (
-            <span className="text-[0.55rem] text-white/30 bg-white/[0.06] px-1.5 py-0.5 rounded">
-              {featureCount} feature{featureCount !== 1 ? "s" : ""}
+            <span className="text-[0.55rem] text-yellow-400/60 bg-yellow-400/10 px-1.5 py-0.5 rounded">
+              {featureCount} suggestion{featureCount !== 1 ? "s" : ""}
             </span>
           )}
           <svg
@@ -368,16 +410,56 @@ function NoteCard({ note, expanded, onToggle, onDelete }: {
 
           {note.suggestions.length > 0 && (
             <div>
-              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Extracted Features</div>
-              <div className="space-y-1">
+              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">Suggested Features</div>
+              <div className="space-y-2">
                 {note.suggestions.map((s) => (
-                  <div key={s.id} className="text-xs text-white/50 flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      s.status === "accepted" ? "bg-white/40" :
-                      s.status === "dismissed" ? "bg-red-400/40" :
-                      "bg-yellow-400/40"
-                    }`} />
-                    {s.suggestedTitle}
+                  <div key={s.id} className="rounded-md border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            s.status === "accepted" ? "bg-green-400" :
+                            s.status === "dismissed" ? "bg-red-400/40" :
+                            "bg-yellow-400"
+                          }`} />
+                          <span className="text-xs text-white/70 font-medium">{s.suggestedTitle}</span>
+                          {s.suggestedPriority && (
+                            <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${
+                              s.suggestedPriority === "high" ? "text-red-400 bg-red-500/10" :
+                              s.suggestedPriority === "medium" ? "text-yellow-400 bg-yellow-500/10" :
+                              "text-white/40 bg-white/[0.06]"
+                            }`}>
+                              {s.suggestedPriority}
+                            </span>
+                          )}
+                        </div>
+                        {s.suggestedDescription && (
+                          <p className="text-[0.65rem] text-white/35 mt-1 ml-3.5 line-clamp-2">{s.suggestedDescription}</p>
+                        )}
+                      </div>
+                      {s.status === "pending" && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleAddToWishlist(s); }}
+                            className="px-2 py-1 text-[0.6rem] rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                          >
+                            + Wishlist
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDismissSuggestion(s.id); }}
+                            className="px-2 py-1 text-[0.6rem] rounded text-white/20 hover:text-white/40 hover:bg-white/[0.04] transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+                      {s.status === "accepted" && (
+                        <span className="text-[0.55rem] text-green-400/60 shrink-0">Added</span>
+                      )}
+                      {s.status === "dismissed" && (
+                        <span className="text-[0.55rem] text-white/20 shrink-0">Dismissed</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
