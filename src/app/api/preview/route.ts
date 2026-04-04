@@ -80,16 +80,37 @@ async function getDisabledRoutes(projectId: string): Promise<string[]> {
   const disabledFeatures = await prisma.feature.findMany({
     where: {
       projectId,
-      parentId: { not: null },
       enabled: false,
       route: { not: null },
     },
-    select: { route: true },
+    select: { route: true, id: true, parentId: true },
   });
 
-  return disabledFeatures
+  const routes = disabledFeatures
     .map(f => f.route)
     .filter((r): r is string => r !== null);
+
+  // For disabled major features, also collect all child routes
+  const disabledMajorIds = disabledFeatures
+    .filter(f => !f.parentId)
+    .map(f => f.id);
+
+  if (disabledMajorIds.length > 0) {
+    const childFeatures = await prisma.feature.findMany({
+      where: {
+        parentId: { in: disabledMajorIds },
+        route: { not: null },
+      },
+      select: { route: true },
+    });
+    for (const child of childFeatures) {
+      if (child.route && !routes.includes(child.route)) {
+        routes.push(child.route);
+      }
+    }
+  }
+
+  return routes;
 }
 
 export async function GET(req: NextRequest) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { execSync } from "child_process";
-import path from "path";
+import { findPreviewDir } from "@/lib/preview-dir";
 
 /**
  * POST: checkout this variant's branch so the preview server shows it.
@@ -22,12 +22,11 @@ export async function POST(
     return NextResponse.json({ error: "Variant not found" }, { status: 404 });
   }
 
-  const slug = variant.feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const projectDir = path.join(process.cwd(), "previews", slug);
+  const projectDir = findPreviewDir(variant.feature.project);
   const branchName = `variant-${id}`;
 
   try {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, encoding: "utf-8" });
+    execSync(`git checkout ${branchName}`, { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
   } catch (e: any) {
     return NextResponse.json({ error: "Branch not found", detail: e.message }, { status: 404 });
   }

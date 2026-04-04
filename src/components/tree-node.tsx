@@ -24,7 +24,7 @@ type Props = {
 const STATUS_DOT: Record<string, string> = {
   draft: "bg-white/20",
   building: "bg-yellow-400 animate-pulse",
-  live: "bg-green-400",
+  live: "bg-white/40",
   error: "bg-red-400",
 };
 
@@ -60,7 +60,9 @@ export function TreeNode({ feature, depth, selectedId, onSelect, onToggle, onAdd
         <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[feature.status] || STATUS_DOT.draft}`} />
 
         <span className={`flex-1 text-xs truncate ${
-          feature.enabled ? "text-white/80" : "text-white/30 line-through"
+          feature.enabled
+            ? (feature.parentId ? "text-white/80" : "text-red-400 font-medium")
+            : "text-white/30 line-through"
         }`}>
           {feature.parentId && <span className="text-white/20 mr-1">↳</span>}
           {feature.title}
@@ -72,7 +74,9 @@ export function TreeNode({ feature, depth, selectedId, onSelect, onToggle, onAdd
             onToggle(feature.id, !feature.enabled);
           }}
           className={`w-7 h-4 rounded-full transition-colors flex-shrink-0 ${
-            feature.enabled ? "bg-blue-500" : "bg-white/10"
+            feature.enabled
+              ? (feature.parentId ? "bg-blue-500" : "bg-red-500")
+              : "bg-white/10"
           }`}
         >
           <div

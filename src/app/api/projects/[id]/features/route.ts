@@ -27,7 +27,7 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const { title, description, parentId } = body;
+  const { title, description, parentId, route } = body;
 
   if (!title || !description) {
     return NextResponse.json({ error: "title and description required" }, { status: 400 });
@@ -37,13 +37,16 @@ export async function POST(
     where: { projectId: id, parentId: parentId || null },
   });
 
+  const isMajor = !parentId;
   const feature = await prisma.feature.create({
     data: {
       projectId: id,
       parentId: parentId || null,
       title,
       description,
+      route: route || null,
       sortOrder: count,
+      enabled: isMajor ? true : false,
     },
   });
 

@@ -28,7 +28,7 @@ export async function POST(
   for (let i = 0; i < featureSections.length; i++) {
     const section = featureSections[i];
 
-    // Create the major feature
+    // Create the major feature (always enabled by default)
     const feature = await prisma.feature.create({
       data: {
         projectId,
@@ -36,6 +36,7 @@ export async function POST(
         description: section.description,
         route: section.route || null,
         sortOrder: i,
+        enabled: true,
       },
     });
 

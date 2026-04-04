@@ -55,6 +55,7 @@ type Props = {
   wishlistActive?: boolean;
   onFeedback?: () => void;
   feedbackActive?: boolean;
+  onHome?: () => void;
 };
 
 // SVG icon helpers
@@ -181,6 +182,7 @@ export function ProjectSidebar({
   wishlistActive,
   onFeedback,
   feedbackActive,
+  onHome,
 }: Props) {
   const [showWsForm, setShowWsForm] = useState(false);
   const [wsName, setWsName] = useState("");
@@ -198,14 +200,14 @@ export function ProjectSidebar({
   const [workflowsOpen, setWorkflowsOpen] = useState(true);
 
   return (
-    <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 min-h-screen flex flex-col">
+    <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-sm font-bold tracking-tight">
+      <div className="flex items-center justify-between mb-1">
+        <button onClick={onHome} className="text-sm font-bold tracking-tight hover:opacity-80 transition-opacity" title="Home">
           <span className="bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent">
             slushie.machine
           </span>
-        </h1>
+        </button>
         <button
           onClick={onCollapse}
           className="text-white/20 hover:text-white/40 transition-colors p-1"
@@ -216,6 +218,14 @@ export function ProjectSidebar({
           </svg>
         </button>
       </div>
+      <button
+        onClick={onHome}
+        className={`text-[0.6rem] mb-5 transition-colors ${
+          !selectedId ? "text-white/40" : "text-white/15 hover:text-white/30"
+        }`}
+      >
+        Click here to upload a codebase
+      </button>
 
       {/* Workflows header */}
       <button
@@ -430,6 +440,8 @@ export function ProjectSidebar({
         )}
       </div>
 
+      {/* Bottom nav - pinned */}
+      <div className="shrink-0 pt-3 mt-3 border-t border-white/[0.06] space-y-1">
             {/* Notes */}
             <button
               onClick={onNotes}
@@ -478,42 +490,43 @@ export function ProjectSidebar({
               Feedback
             </button>
 
-      {/* Team */}
-      <button
-        onClick={onTeam}
-        className={`mt-4 w-full px-3 py-2 text-xs rounded-lg transition-colors flex items-center gap-2 ${
-          teamActive
-            ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
-            : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
-        }`}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-        Team
-      </button>
+        {/* Team */}
+        <button
+          onClick={onTeam}
+          className={`w-full px-3 py-2 text-xs rounded-lg transition-colors flex items-center gap-2 ${
+            teamActive
+              ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
+              : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+          }`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          Team
+        </button>
 
-      {/* Changelog */}
-      <a
-        href="/changelog"
-        className="mt-4 w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors flex items-center gap-2"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-        </svg>
-        Changelog
-      </a>
+        {/* Changelog */}
+        <a
+          href="/changelog"
+          className="w-full px-3 py-2 text-xs rounded-lg text-white/30 hover:text-white/50 hover:bg-white/[0.04] transition-colors flex items-center gap-2"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+          Changelog
+        </a>
 
-      {/* Log out */}
-      <button
-        onClick={onLogout}
-        className="mt-2 w-full px-3 py-2 text-xs rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-      >
-        Log out
-      </button>
+        {/* Log out */}
+        <button
+          onClick={onLogout}
+          className="w-full px-3 py-2 text-xs rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          Log out
+        </button>
+      </div>
     </aside>
   );
 }

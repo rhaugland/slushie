@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { callClaude } from "@/lib/ai";
 import { suggestionExtractorPrompt } from "@/prompts/suggestion-extractor";
 import { meetingSuggestionsSchema } from "@/lib/schemas";
+import { classifyWishlistItem } from "@/lib/classify-wishlist";
 
 export const extractSuggestions = inngest.createFunction(
   {
@@ -46,9 +47,17 @@ export const extractSuggestions = inngest.createFunction(
       return meetingSuggestionsSchema.parse(JSON.parse(jsonMatch[0]));
     });
 
-    await step.run("save-suggestions", async () => {
+    const wishlistItemIds = await step.run("save-suggestions", async () => {
+      const meeting = await prisma.meeting.findUniqueOrThrow({
+        where: { id: meetingId },
+        include: { project: true },
+      });
+
+      const clientId = meeting.clientId || meeting.project?.clientId;
+      const createdIds: string[] = [];
+
       for (const s of suggestions.suggestions) {
-        await prisma.meetingSuggestion.create({
+        const suggestion = await prisma.meetingSuggestion.create({
           data: {
             meetingId,
             suggestedTitle: s.title,
@@ -58,12 +67,37 @@ export const extractSuggestions = inngest.createFunction(
             status: "pending",
           },
         });
+
+        if (clientId) {
+          const item = await prisma.wishlistItem.create({
+            data: {
+              title: s.title,
+              description: s.description,
+              priority: s.priority,
+              source: "meeting",
+              status: "pending",
+              clientId,
+              projectId: meeting.projectId,
+              meetingId,
+              meetingSuggestionId: suggestion.id,
+            },
+          });
+          createdIds.push(item.id);
+        }
       }
 
       await prisma.meeting.update({
         where: { id: meetingId },
         data: { status: "ready" },
       });
+
+      return createdIds;
+    });
+
+    await step.run("classify-features", async () => {
+      for (const id of wishlistItemIds) {
+        await classifyWishlistItem(id);
+      }
     });
 
     return { meetingId, count: suggestions.suggestions.length };

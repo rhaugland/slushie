@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { execSync } from "child_process";
-import path from "path";
+import { findPreviewDir } from "@/lib/preview-dir";
 
 /**
  * POST: checkout main branch so the preview server shows the original.
@@ -18,11 +18,10 @@ export async function POST(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const slug = project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const projectDir = path.join(process.cwd(), "previews", slug);
+  const projectDir = findPreviewDir(project);
 
   try {
-    execSync("git checkout main", { cwd: projectDir, encoding: "utf-8" });
+    execSync("git checkout main", { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
   } catch (e: any) {
     return NextResponse.json({ error: "Failed to restore", detail: e.message }, { status: 500 });
   }

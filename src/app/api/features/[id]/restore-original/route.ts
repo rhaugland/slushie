@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { execSync } from "child_process";
-import path from "path";
+import { findPreviewDir } from "@/lib/preview-dir";
 
 /**
  * POST: Restore original as the live version — unset all variants' isMain and checkout main.
@@ -28,18 +28,17 @@ export async function POST(
   });
 
   // Restore original files from pre-promote tag, then commit on main
-  const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const projectDir = path.join(process.cwd(), "previews", slug);
+  const projectDir = findPreviewDir(feature.project);
 
   try {
-    execSync("git checkout main", { cwd: projectDir, encoding: "utf-8" });
+    execSync("git checkout main", { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
     // Restore files from the pre-promote snapshot if it exists
     try {
-      execSync("git checkout pre-promote -- .", { cwd: projectDir, encoding: "utf-8" });
-      const status = execSync("git status --porcelain", { cwd: projectDir, encoding: "utf-8" }).trim();
+      execSync("git checkout pre-promote -- .", { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
+      const status = execSync("git status --porcelain", { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" }).trim();
       if (status) {
-        execSync("git add -A", { cwd: projectDir, encoding: "utf-8" });
-        execSync('git commit -m "restore: original version"', { cwd: projectDir, encoding: "utf-8" });
+        execSync("git add -A", { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
+        execSync('git commit -m "restore: original version"', { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
       }
     } catch { /* pre-promote tag may not exist yet — main is already the original */ }
   } catch (e: any) {

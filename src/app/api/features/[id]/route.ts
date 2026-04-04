@@ -39,6 +39,19 @@ export async function DELETE(
     } catch { /* project dir may not exist yet */ }
   }
 
+  // Cascade-delete children if this is a major feature
+  const children = await prisma.feature.findMany({ where: { parentId: id } });
+  if (children.length > 0) {
+    const childIds = children.map(c => c.id);
+    // Delete child variants, builds, then the children themselves
+    await prisma.variant.deleteMany({ where: { featureId: { in: childIds } } });
+    await prisma.featureBuild.deleteMany({ where: { featureId: { in: childIds } } });
+    await prisma.feature.deleteMany({ where: { parentId: id } });
+  }
+
+  // Delete this feature's own variants and builds
+  await prisma.variant.deleteMany({ where: { featureId: id } });
+  await prisma.featureBuild.deleteMany({ where: { featureId: id } });
   await prisma.feature.delete({ where: { id } });
 
   logActivity({
@@ -46,8 +59,8 @@ export async function DELETE(
     projectId: feature.projectId,
     action: "feature_deleted",
     category: "feature",
-    description: `Feature "${feature.title}" deleted`,
-    metadata: { featureId: id, featureTitle: feature.title },
+    description: `Feature "${feature.title}" deleted${children.length > 0 ? ` (and ${children.length} sub-features)` : ""}`,
+    metadata: { featureId: id, featureTitle: feature.title, childrenDeleted: children.length },
   });
 
   return NextResponse.json({ ok: true });

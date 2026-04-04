@@ -57,6 +57,7 @@ type Props = {
   onUpdate: () => void;
   autoOpenAddFeature?: boolean;
   onAutoOpenAddFeatureConsumed?: () => void;
+  onAddMajorFeature?: () => void;
 };
 
 function deriveRoute(title: string): string {
@@ -73,11 +74,11 @@ function previewUrl(projectId: string, route: string, isolate: boolean = false):
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   draft: { text: "Ready to build", color: "text-white/40 bg-white/[0.06]" },
   building: { text: "Building...", color: "text-yellow-400 bg-yellow-500/10" },
-  live: { text: "Live", color: "text-green-400 bg-green-500/10" },
+  live: { text: "Live", color: "text-white/50 bg-white/[0.06]" },
   error: { text: "Error", color: "text-red-400 bg-red-500/10" },
 };
 
-export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parentRoute, onUpdate, autoOpenAddFeature, onAutoOpenAddFeatureConsumed }: Props) {
+export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parentRoute, onUpdate, autoOpenAddFeature, onAutoOpenAddFeatureConsumed, onAddMajorFeature }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(feature.title);
   const [description, setDescription] = useState(feature.description);
@@ -184,28 +185,27 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
 
   const anyPromoted = variants.some(v => v.isMain);
 
+  function bustIframe(ref: React.RefObject<HTMLIFrameElement | null>) {
+    if (!ref.current) return;
+    const url = new URL(ref.current.src, window.location.origin);
+    url.searchParams.set("_t", Date.now().toString());
+    ref.current.src = url.toString();
+  }
+
   async function handleRestoreOriginal() {
     await fetch(`/api/features/${feature.id}/restore-original`, { method: "POST" });
     setExpandedVariant(null);
     onUpdate();
-    // Give the preview server a moment to pick up the branch change
-    setTimeout(() => {
-      if (previewRef.current) {
-        previewRef.current.src = previewRef.current.src;
-      }
-    }, 1000);
+    // Give the dev server time to recompile after git checkout
+    setTimeout(() => bustIframe(previewRef), 2000);
   }
 
   async function handlePromote(variantId: string) {
     await fetch(`/api/variants/${variantId}/promote`, { method: "POST" });
     setExpandedVariant(null);
     onUpdate();
-    // Give the preview server a moment to pick up the promoted variant on main
-    setTimeout(() => {
-      if (previewRef.current) {
-        previewRef.current.src = previewRef.current.src;
-      }
-    }, 1000);
+    // Give the dev server time to recompile after git checkout
+    setTimeout(() => bustIframe(previewRef), 2000);
   }
 
   async function handleDeleteVariant(variantId: string) {
@@ -233,13 +233,15 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
       // Collapse — restore main branch for the live preview
       await fetch(`/api/projects/${projectId}/restore-og`, { method: "POST" });
       setExpandedVariant(null);
-      setTimeout(() => {
-        if (previewRef.current) previewRef.current.src = previewRef.current.src;
-      }, 500);
+      setTimeout(() => bustIframe(previewRef), 2000);
     } else {
       // Expand — checkout variant branch
       await fetch(`/api/variants/${variantId}/preview`, { method: "POST" });
       setExpandedVariant(variantId);
+      setTimeout(() => {
+        bustIframe(previewRef);
+        bustIframe(variantPreviewRef);
+      }, 2000);
     }
   }
 
@@ -265,14 +267,6 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
         <div className="mb-4">
           <div className="flex items-start justify-between">
             <h2 className="text-xl font-semibold text-[#f1f5f9] mb-1">{feature.title}</h2>
-            <span className={`text-[0.6rem] px-2 py-1 rounded-md shrink-0 ${statusInfo.color}`}>
-              {feature.status === "building" ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
-                  <BuildCountdown />
-                </span>
-              ) : statusInfo.text}
-            </span>
           </div>
           <p className="text-sm text-white/40 mb-1">{feature.description}</p>
         </div>
@@ -618,9 +612,6 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             </>
           )}
         </div>
-        <span className={`text-[0.6rem] px-2 py-1 rounded-md ${statusInfo.color}`}>
-          {statusInfo.text}
-        </span>
       </div>
 
       {feature.status === "building" && buildProgress && (
@@ -663,7 +654,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
                     </span>
                   )}
                   <span className={`w-1.5 h-1.5 rounded-full ${
-                    child.status === "live" ? "bg-green-400" :
+                    child.status === "live" ? "bg-white/40" :
                     child.status === "building" ? "bg-yellow-400" :
                     child.status === "error" ? "bg-red-400" :
                     "bg-white/20"
@@ -755,12 +746,22 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setAddingFeature(true)}
-            className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors"
-          >
-            + Add feature
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setAddingFeature(true)}
+              className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors"
+            >
+              + Add minor feature
+            </button>
+            {onAddMajorFeature && (
+              <button
+                onClick={onAddMajorFeature}
+                className="text-[0.6rem] text-red-400/40 hover:text-red-400/70 transition-colors"
+              >
+                + Add major feature
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -797,6 +798,16 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
           </div>
         );
       })()}
+
+      {/* Delete major feature */}
+      <div className="border-t border-white/[0.06] pt-4 mt-6">
+        <button
+          onClick={handleDelete}
+          className="px-4 py-2 text-xs rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          Delete feature & all sub-features
+        </button>
+      </div>
     </div>
   );
 }

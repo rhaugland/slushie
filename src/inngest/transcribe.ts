@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { DeepgramClient } from "@deepgram/sdk";
 import { readFile } from "fs/promises";
 import path from "path";
+import { callClaude } from "@/lib/ai";
+import { noteSummarizerPrompt } from "@/prompts/note-summarizer";
+import { noteSummarySchema } from "@/lib/schemas";
 
 const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY! as any);
 
@@ -51,6 +54,29 @@ export const transcribe = inngest.createFunction(
       await prisma.meeting.update({
         where: { id: meetingId },
         data: { transcript, status: "extracting" },
+      });
+    });
+
+    await step.run("summarize", async () => {
+      if (!transcript.trim()) return;
+      const prompt = noteSummarizerPrompt(transcript);
+      const raw = await callClaude({
+        systemPrompt: prompt.system,
+        userMessage: prompt.user,
+        temperature: 0.1,
+      });
+      let summary: string;
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON");
+        const parsed = noteSummarySchema.parse(JSON.parse(jsonMatch[0]));
+        summary = parsed.summary;
+      } catch {
+        summary = raw.slice(0, 2000);
+      }
+      await prisma.meeting.update({
+        where: { id: meetingId },
+        data: { summary },
       });
     });
 

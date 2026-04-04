@@ -30,6 +30,7 @@ export async function PATCH(
     where: { projectId: suggestion.meeting.projectId, parentId: parentId || null },
   });
 
+  const isMajor = !parentId;
   const feature = await prisma.feature.create({
     data: {
       projectId: suggestion.meeting.projectId,
@@ -37,6 +38,7 @@ export async function PATCH(
       title: suggestion.suggestedTitle,
       description: suggestion.suggestedDescription,
       sortOrder: count,
+      enabled: isMajor ? true : false,
     },
   });
 

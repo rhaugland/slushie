@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readManifest, writeManifest, toggleFeatureInManifest } from "@/lib/manifest";
 import { logActivity } from "@/lib/activity";
-import path from "path";
+import { findPreviewDir } from "@/lib/preview-dir";
 
 export async function POST(
   req: NextRequest,
@@ -22,10 +22,15 @@ export async function POST(
     include: { project: true },
   });
 
-  // Major features: update manifest
+  // Major features: cascade to all children + update manifest
   if (!feature.parentId) {
-    const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const projectDir = path.join(process.cwd(), "previews", slug);
+    // Cascade: disable/enable all minor features under this major feature
+    await prisma.feature.updateMany({
+      where: { parentId: id },
+      data: { enabled },
+    });
+
+    const projectDir = findPreviewDir(feature.project);
     try {
       const manifest = await readManifest(projectDir);
       const updated = toggleFeatureInManifest(manifest, id, enabled);
@@ -40,9 +45,6 @@ export async function POST(
       });
     } catch { /* ignore */ }
   }
-
-  // Minor features: the DB flag is enough — the preview proxy checks
-  // enabled state at runtime and blocks disabled feature routes.
 
   logActivity({
     workspaceId: feature.project.workspaceId,

@@ -233,6 +233,11 @@ export default function Home() {
             wishlistActive={selection.type === "wishlist"}
             onFeedback={() => setSelection({ type: "feedback" })}
             feedbackActive={selection.type === "feedback"}
+            onHome={() => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "project" });
+            }}
           />
         )
       )}

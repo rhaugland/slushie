@@ -91,6 +91,7 @@ export const buildWithClaudeCode = inngest.createFunction(
   {
     id: "feature-build-claude-code",
     retries: 1,
+    concurrency: [{ limit: 1 }],
     triggers: [{ event: "feature/build-claude-code" }],
   },
   async ({ event, step }) => {
@@ -111,8 +112,22 @@ export const buildWithClaudeCode = inngest.createFunction(
         },
       });
 
-      const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-      const projectDir = path.join(process.cwd(), "previews", slug);
+      // Find the actual preview directory by checking which previews/* dir
+      // has the running dev server on this project's port
+      let projectDir: string | undefined;
+      if (feature.project.port) {
+        try {
+          const psOut = run(`ps aux | grep "port ${feature.project.port}" | grep -v grep`, process.cwd());
+          const match = psOut.match(/previews\/([^\s/]+)/);
+          if (match) {
+            projectDir = path.join(process.cwd(), "previews", match[1]);
+          }
+        } catch { /* fall through */ }
+      }
+      if (!projectDir) {
+        const slug = feature.project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+        projectDir = path.join(process.cwd(), "previews", slug);
+      }
 
       // Get sibling minor features for context
       const siblings = feature.parentId
@@ -207,8 +222,10 @@ ${context.parentRoute ? `Parent route: ${context.parentRoute}` : ""}${siblingCon
 
 Look at the existing codebase structure first, then implement this feature.
 - Read the existing layout, components, and styles to match the app's design language
-- Create or modify page components and any supporting components needed
+- NEVER overwrite or replace existing page files. Add to them — inject your feature into the existing code while preserving all current content, branding, and styling
+- Create new supporting components in separate files when possible
 - Use the existing Tailwind CSS classes and design patterns from the codebase
+- Match the existing color scheme, typography, and branding — do NOT introduce new brand colors or rename the app
 - Make sure the feature is accessible at its route
 - Do NOT modify the auth system or prisma configuration${userInstructions}`;
 
@@ -243,8 +260,10 @@ Look at the existing codebase structure first, then implement this feature.
     }
 
     await step.run("update-status", async () => {
-      const success = result.exitCode === 0;
       const logs = result.stdout.slice(-5000) + (result.stderr ? "\n---STDERR---\n" + result.stderr.slice(-2000) : "");
+      const isCreditError = logs.toLowerCase().includes("credit balance is too low") || logs.toLowerCase().includes("insufficient_quota");
+      const success = result.exitCode === 0 && !isCreditError;
+      const failReason = isCreditError ? "credit_exhausted" : (success ? null : "build_failed");
 
       if (mode === "og") {
         await prisma.feature.update({
@@ -275,6 +294,10 @@ Look at the existing codebase structure first, then implement this feature.
         });
       }
 
+      const actionDesc = isCreditError
+        ? `Build failed for "${context.featureTitle}" — Anthropic API credits exhausted`
+        : `Build ${success ? "completed" : "failed"} for "${context.featureTitle}"`;
+
       logActivity({
         workspaceId: context.workspaceId,
         projectId,
@@ -282,8 +305,8 @@ Look at the existing codebase structure first, then implement this feature.
         userName: "Claude Code",
         action: success ? "build_completed" : "build_failed",
         category: "build",
-        description: `Build ${success ? "completed" : "failed"} for "${context.featureTitle}"`,
-        metadata: { featureId: featureId, tokensUsed: result.tokensUsed, durationMs: result.durationMs },
+        description: actionDesc,
+        metadata: { featureId: featureId, tokensUsed: result.tokensUsed, durationMs: result.durationMs, failReason },
       });
     });
 

@@ -9,28 +9,46 @@ async function getProject(projectId: string) {
 }
 
 /**
- * Get all disabled micro feature routes for a project.
- * Cached per-request (no global cache to ensure toggle changes are instant).
- */
-/**
- * Get disabled micro feature routes for a project.
- * Only checks micro features (with parentId) — major features being disabled
- * doesn't block previews of their children.
+ * Get all disabled feature routes for a project.
+ * Includes routes from disabled major features (and all their children)
+ * as well as individually disabled minor features.
  */
 async function getDisabledRoutes(projectId: string): Promise<string[]> {
+  // Get all disabled features (both major and minor)
   const disabledFeatures = await prisma.feature.findMany({
     where: {
       projectId,
-      parentId: { not: null },
       enabled: false,
       route: { not: null },
     },
-    select: { route: true },
+    select: { route: true, id: true, parentId: true },
   });
 
-  return disabledFeatures
+  const routes = disabledFeatures
     .map(f => f.route)
     .filter((r): r is string => r !== null);
+
+  // For disabled major features, also collect all child routes
+  const disabledMajorIds = disabledFeatures
+    .filter(f => !f.parentId)
+    .map(f => f.id);
+
+  if (disabledMajorIds.length > 0) {
+    const childFeatures = await prisma.feature.findMany({
+      where: {
+        parentId: { in: disabledMajorIds },
+        route: { not: null },
+      },
+      select: { route: true },
+    });
+    for (const child of childFeatures) {
+      if (child.route && !routes.includes(child.route)) {
+        routes.push(child.route);
+      }
+    }
+  }
+
+  return routes;
 }
 
 function disabledPageHtml(): string {

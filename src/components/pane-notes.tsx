@@ -68,6 +68,22 @@ export function PaneNotes({ workspaces }: Props) {
   const [newNoteFile, setNewNoteFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [liveMeeting, setLiveMeeting] = useState<{ meetingId: string; roomCode: string } | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  async function generateSamples() {
+    if (!selectedProjectId || generating) return;
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/demo/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedProjectId, type: "notes" }),
+      });
+      if (res.ok) await loadNotes();
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   const loadNotes = useCallback(async () => {
     if (!selectedProjectId) return;
@@ -158,12 +174,21 @@ export function PaneNotes({ workspaces }: Props) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-[#f1f5f9]">Notes</h1>
-        <button
-          onClick={() => setShowNewNote(!showNewNote)}
-          className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
-        >
-          + New Note
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generateSamples}
+            disabled={generating}
+            className="px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 disabled:opacity-50 transition-colors"
+          >
+            {generating ? "Generating..." : "AI Samples"}
+          </button>
+          <button
+            onClick={() => setShowNewNote(!showNewNote)}
+            className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
+          >
+            + New Note
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">

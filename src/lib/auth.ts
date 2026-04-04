@@ -89,7 +89,7 @@ export async function getCurrentUser() {
                       features: {
                         where: { parentId: null },
                         orderBy: { sortOrder: "asc" },
-                        select: { id: true, status: true },
+                        select: { id: true, title: true, status: true },
                       },
                     },
                   },

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { callClaude } from "@/lib/ai";
 import { feedbackAnalyzerPrompt } from "@/prompts/feedback-analyzer";
 import { feedbackAnalysisSchema } from "@/lib/schemas";
+import { classifyWishlistItem } from "@/lib/classify-wishlist";
 
 export const analyzeFeedback = inngest.createFunction(
   {
@@ -34,7 +35,7 @@ export const analyzeFeedback = inngest.createFunction(
       return feedbackAnalysisSchema.parse(JSON.parse(jsonMatch[0]));
     });
 
-    await step.run("save-analysis", async () => {
+    const wishlistItemId = await step.run("save-analysis", async () => {
       const wishlistItem = await prisma.wishlistItem.create({
         data: {
           title: analysis.title,
@@ -58,6 +59,12 @@ export const analyzeFeedback = inngest.createFunction(
           status: "reviewed",
         },
       });
+
+      return wishlistItem.id;
+    });
+
+    await step.run("classify-feature", async () => {
+      await classifyWishlistItem(wishlistItemId);
     });
 
     return { feedbackItemId, title: analysis.title };

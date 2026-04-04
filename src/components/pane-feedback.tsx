@@ -53,9 +53,26 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [embedCodes, setEmbedCodes] = useState<Record<string, string>>({});
   const [projectFeedbackCounts, setProjectFeedbackCounts] = useState<Record<string, number>>({});
-  const [showEmbedCards, setShowEmbedCards] = useState(false);
+  const [showEmbedCards, setShowEmbedCards] = useState(true);
   const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
   const [movingItem, setMovingItem] = useState<FeedbackItemData | null>(null);
+  const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  async function generateSamples() {
+    if (!selectedProjectId || generating) return;
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/demo/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedProjectId, type: "feedback" }),
+      });
+      if (res.ok) await loadItems();
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   const selectedProject = allProjects.find((p) => p.id === selectedProjectId);
 
@@ -84,25 +101,22 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
     return () => clearInterval(interval);
   }, [items, loadItems]);
 
-  // Load embed codes and feedback counts for all projects when cards are shown
+  // Load embed codes and feedback counts for all projects on mount
   useEffect(() => {
-    if (!showEmbedCards) return;
     allProjects.forEach(async (p) => {
-      if (!embedCodes[p.id]) {
-        const res = await fetch(`/api/projects/${p.id}/embed-key`);
-        if (res.ok) {
-          const data = await res.json();
-          setEmbedCodes((prev) => ({ ...prev, [p.id]: data.embedCode }));
-        }
-      }
-      const res = await fetch(`/api/feedback?projectId=${p.id}`, { cache: "no-store" });
+      const res = await fetch(`/api/projects/${p.id}/embed-key`);
       if (res.ok) {
         const data = await res.json();
+        setEmbedCodes((prev) => ({ ...prev, [p.id]: data.embedCode }));
+      }
+      const fbRes = await fetch(`/api/feedback?projectId=${p.id}`, { cache: "no-store" });
+      if (fbRes.ok) {
+        const data = await fbRes.json();
         setProjectFeedbackCounts((prev) => ({ ...prev, [p.id]: data.length }));
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showEmbedCards]);
+  }, []);
 
   function copyEmbed(projectId: string, code: string) {
     navigator.clipboard.writeText(code);
@@ -136,12 +150,21 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-[#f1f5f9]">Feedback</h1>
-        <button
-          onClick={() => setShowEmbedCards(!showEmbedCards)}
-          className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
-        >
-          {showEmbedCards ? "Hide Widgets" : "Embed Widgets"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={generateSamples}
+            disabled={generating}
+            className="px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 disabled:opacity-50 transition-colors"
+          >
+            {generating ? "Generating..." : "AI Samples"}
+          </button>
+          <button
+            onClick={() => setShowEmbedCards(!showEmbedCards)}
+            className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
+          >
+            {showEmbedCards ? "Hide Widgets" : "Embed Widgets"}
+          </button>
+        </div>
       </div>
 
       {/* Embed code cards — one per project */}
@@ -162,14 +185,22 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
                       <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/[0.04] text-white/25 font-medium">Not installed</span>
                     )}
                   </div>
-                  {code && (
+                  <div className="flex gap-1.5 shrink-0">
                     <button
-                      onClick={() => copyEmbed(p.id, code)}
-                      className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors shrink-0"
+                      onClick={() => setPreviewProjectId(previewProjectId === p.id ? null : p.id)}
+                      className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
                     >
-                      {copiedProjectId === p.id ? "Copied!" : "Copy"}
+                      Preview
                     </button>
-                  )}
+                    {code && (
+                      <button
+                        onClick={() => copyEmbed(p.id, code)}
+                        className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
+                      >
+                        {copiedProjectId === p.id ? "Copied!" : "Copy"}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {code ? (
                   <code className="block text-[0.65rem] text-blue-400/70 bg-white/[0.03] px-3 py-2 rounded-md break-all leading-relaxed">
@@ -177,6 +208,53 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
                   </code>
                 ) : (
                   <div className="text-[0.6rem] text-white/20">Loading...</div>
+                )}
+                {previewProjectId === p.id && (
+                  <div className="mt-3">
+                    <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1.5">Widget Preview</div>
+                    <div className="rounded-lg border border-white/[0.08] overflow-hidden" style={{ height: 220 }}>
+                      <iframe
+                        srcDoc={`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f9fafb;}
+.slushie-fb-bar{position:fixed;top:0;left:0;right:0;z-index:999;background:#0c1120;border-bottom:1px solid rgba(255,255,255,0.08);padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:rgba(255,255,255,0.5)}
+.slushie-fb-bar a{color:rgba(255,255,255,0.8);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.slushie-fb-bar a:hover{color:#fff}
+.slushie-fb-form{position:fixed;top:0;left:0;right:0;z-index:999;background:#0c1120;border-bottom:1px solid rgba(255,255,255,0.08);padding:12px 16px;display:none}
+.slushie-fb-form textarea{width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;color:rgba(255,255,255,0.8);font-size:13px;font-family:inherit;resize:none;outline:none;margin-bottom:8px;box-sizing:border-box}
+.slushie-fb-form textarea::placeholder{color:rgba(255,255,255,0.2)}
+.slushie-fb-btns{display:flex;gap:8px;justify-content:flex-end}
+.slushie-fb-submit{background:#ef4444;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:12px;cursor:pointer}
+.slushie-fb-submit:disabled{opacity:0.4}
+.slushie-fb-cancel{background:none;color:rgba(255,255,255,0.3);border:none;padding:6px 12px;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="slushie-fb-bar" id="bar">What could be better? <a id="open">Let us know</a></div>
+<div class="slushie-fb-form" id="form">
+<textarea rows="3" placeholder="Tell us what could be better..." id="ta"></textarea>
+<div class="slushie-fb-btns"><button class="slushie-fb-cancel" id="cancel">Cancel</button><button class="slushie-fb-submit" disabled id="submit">Submit</button></div>
+</div>
+<div style="margin-top:37px;padding:30px 20px;text-align:center;color:#6b7280;font-size:14px;">Your app content here</div>
+<script>
+var bar=document.getElementById('bar'),form=document.getElementById('form'),ta=document.getElementById('ta'),submit=document.getElementById('submit');
+document.getElementById('open').onclick=function(){bar.style.display='none';form.style.display='block';ta.focus()};
+document.getElementById('cancel').onclick=function(){form.style.display='none';bar.style.display='flex';ta.value='';submit.disabled=true};
+ta.oninput=function(){submit.disabled=!ta.value.trim()};
+submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rgba(255,255,255,0.6);font-size:13px;padding:4px 0">Thanks for your feedback!</div>';setTimeout(function(){form.style.display="none";bar.style.display="flex"},1500)};
+</script>
+</body>
+</html>`}
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts"
+                        title={`Feedback widget preview for ${p.name}`}
+                      />
+                    </div>
+                    <p className="text-[0.55rem] text-white/20 mt-1">This is how the feedback bar appears to your users. Click &quot;Let us know&quot; to see the form.</p>
+                  </div>
                 )}
               </div>
             );
