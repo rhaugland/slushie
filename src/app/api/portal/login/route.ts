@@ -25,11 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
-  if (user.clientMemberships.length === 0) {
-    return NextResponse.json({ error: "No client access. Contact your project team for an invite." }, { status: 403 });
-  }
-
-  // Claim any pending client member invites
+  // Claim any pending client member invites before checking access
   const pendingClientMembers = await prisma.clientMember.findMany({
     where: { invitedEmail: email, userId: null },
   });
@@ -38,6 +34,12 @@ export async function POST(req: NextRequest) {
       where: { id: cm.id },
       data: { userId: user.id, invitedEmail: null },
     });
+  }
+
+  // Check client access (after claiming invites so first-time users aren't locked out)
+  const totalMemberships = user.clientMemberships.length + pendingClientMembers.length;
+  if (totalMemberships === 0) {
+    return NextResponse.json({ error: "No client access. Contact your project team for an invite." }, { status: 403 });
   }
 
   await setSessionCookie(user.id, user.email);
