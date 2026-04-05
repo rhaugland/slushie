@@ -243,6 +243,10 @@ export default function Home() {
               setSelection({ type: "client-portal" });
             }}
             clientPortalActive={selection.type === "client-portal"}
+            onCostCenter={() => {
+              setSelection({ type: "cost-center" });
+            }}
+            costCenterActive={selection.type === "cost-center"}
             onHome={() => {
               setSelectedProjectId(null);
               setProject(null);
@@ -424,6 +428,13 @@ export default function Home() {
             workspaces={workspaces}
             onUpdate={() => loadUser()}
           />
+        </main>
+      ) : selection.type === "cost-center" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="p-6">
+            <h1 className="text-xl font-semibold text-[#f1f5f9] mb-4">Cost Center</h1>
+            <p className="text-sm text-white/30">Select a project to view its API costs.</p>
+          </div>
         </main>
       ) : selection.type === "client-portal" ? (
         <main className="flex-1 p-6 overflow-y-auto">

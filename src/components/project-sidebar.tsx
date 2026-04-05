@@ -57,6 +57,8 @@ type Props = {
   feedbackActive?: boolean;
   onClientPortal?: () => void;
   clientPortalActive?: boolean;
+  onCostCenter?: () => void;
+  costCenterActive?: boolean;
   onHome?: () => void;
 };
 
@@ -186,6 +188,8 @@ export function ProjectSidebar({
   feedbackActive,
   onClientPortal,
   clientPortalActive,
+  onCostCenter,
+  costCenterActive,
   onHome,
 }: Props) {
   const [showWsForm, setShowWsForm] = useState(false);
@@ -509,6 +513,22 @@ export function ProjectSidebar({
                 <line x1="12" y1="17" x2="12" y2="21" />
               </svg>
               Client Portal
+            </button>
+
+            {/* Cost Center */}
+            <button
+              onClick={onCostCenter}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
+                costCenterActive
+                  ? "bg-white/[0.08] text-white/80"
+                  : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+              Cost Center
             </button>
 
         {/* Team */}
