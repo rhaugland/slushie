@@ -10,6 +10,7 @@ import { PaneTeam } from "@/components/pane-team";
 import { PaneNotes } from "@/components/pane-notes";
 import { PaneWishlist } from "@/components/pane-wishlist";
 import { PaneFeedback } from "@/components/pane-feedback";
+import { PaneClientPortal } from "@/components/pane-client-portal";
 import { AddMajorFeature } from "@/components/add-major-feature";
 
 type Selection =
@@ -22,6 +23,7 @@ type Selection =
   | { type: "notes" }
   | { type: "wishlist" }
   | { type: "feedback" }
+  | { type: "client-portal" }
   | { type: "add-major-feature" };
 
 export default function Home() {
@@ -233,6 +235,12 @@ export default function Home() {
             wishlistActive={selection.type === "wishlist"}
             onFeedback={() => setSelection({ type: "feedback" })}
             feedbackActive={selection.type === "feedback"}
+            onClientPortal={() => {
+              setSelectedProjectId(null);
+              setProject(null);
+              setSelection({ type: "client-portal" });
+            }}
+            clientPortalActive={selection.type === "client-portal"}
             onHome={() => {
               setSelectedProjectId(null);
               setProject(null);
@@ -409,6 +417,10 @@ export default function Home() {
             workspaces={workspaces}
             onUpdate={() => loadUser()}
           />
+        </main>
+      ) : selection.type === "client-portal" ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <PaneClientPortal workspaces={workspaces} />
         </main>
       ) : selection.type === "team" ? (
         <main className="flex-1 p-6 overflow-y-auto">

@@ -11,7 +11,8 @@ type Selection =
   | { type: "feature"; id: string }
   | { type: "meeting"; id: string }
   | { type: "workspace-settings"; workspaceId: string }
-  | { type: "client-settings"; clientId: string };
+  | { type: "client-settings"; clientId: string }
+  | { type: string };
 
 type WorkspaceMembership = {
   workspaceId: string;

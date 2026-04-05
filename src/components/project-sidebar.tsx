@@ -55,6 +55,8 @@ type Props = {
   wishlistActive?: boolean;
   onFeedback?: () => void;
   feedbackActive?: boolean;
+  onClientPortal?: () => void;
+  clientPortalActive?: boolean;
   onHome?: () => void;
 };
 
@@ -182,6 +184,8 @@ export function ProjectSidebar({
   wishlistActive,
   onFeedback,
   feedbackActive,
+  onClientPortal,
+  clientPortalActive,
   onHome,
 }: Props) {
   const [showWsForm, setShowWsForm] = useState(false);
@@ -488,6 +492,23 @@ export function ProjectSidebar({
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               Feedback
+            </button>
+
+            {/* Client Portal */}
+            <button
+              onClick={onClientPortal}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
+                clientPortalActive
+                  ? "bg-white/[0.08] text-white/80"
+                  : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              Client Portal
             </button>
 
         {/* Team */}
