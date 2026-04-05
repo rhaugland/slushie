@@ -55,8 +55,8 @@ type Props = {
   wishlistActive?: boolean;
   onFeedback?: () => void;
   feedbackActive?: boolean;
-  onClientPortal?: () => void;
-  clientPortalActive?: boolean;
+  onClientView?: () => void;
+  clientViewActive?: boolean;
   onCostCenter?: () => void;
   costCenterActive?: boolean;
   onHome?: () => void;
@@ -186,8 +186,8 @@ export function ProjectSidebar({
   wishlistActive,
   onFeedback,
   feedbackActive,
-  onClientPortal,
-  clientPortalActive,
+  onClientView,
+  clientViewActive,
   onCostCenter,
   costCenterActive,
   onHome,
@@ -498,11 +498,11 @@ export function ProjectSidebar({
               Feedback
             </button>
 
-            {/* Client Portal */}
+            {/* Client View */}
             <button
-              onClick={onClientPortal}
+              onClick={onClientView}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-                clientPortalActive
+                clientViewActive
                   ? "bg-white/[0.08] text-white/80"
                   : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
               }`}
@@ -512,7 +512,7 @@ export function ProjectSidebar({
                 <line x1="8" y1="21" x2="16" y2="21" />
                 <line x1="12" y1="17" x2="12" y2="21" />
               </svg>
-              Client Portal
+              Client View
             </button>
 
             {/* Cost Center */}

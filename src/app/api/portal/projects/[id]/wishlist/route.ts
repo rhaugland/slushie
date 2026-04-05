@@ -54,3 +54,43 @@ export async function GET(
 
   return NextResponse.json({ items: result });
 }
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentClientUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+
+  let clientId: string | null = null;
+  for (const cm of user.clientMemberships) {
+    if (cm.projectAccess.some((pa) => pa.project.id === id)) {
+      clientId = cm.client.id;
+      break;
+    }
+  }
+  if (!clientId) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const { title, description, priority } = await req.json();
+  if (!title || !description) {
+    return NextResponse.json({ error: "title and description required" }, { status: 400 });
+  }
+
+  const item = await prisma.wishlistItem.create({
+    data: {
+      title,
+      description,
+      clientId,
+      projectId: id,
+      priority: priority || null,
+      source: "portal",
+      status: "pending",
+    },
+  });
+
+  return NextResponse.json(item, { status: 201 });
+}

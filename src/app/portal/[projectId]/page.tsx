@@ -3,7 +3,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 
-type Tab = "preview" | "wishlist" | "feedback";
+type Tab = "preview" | "notes" | "wishlist" | "feedback";
+
+interface NoteItem {
+  id: string;
+  type: string;
+  textContent: string | null;
+  transcript: string | null;
+  status: string;
+  createdAt: string;
+  suggestions: { id: string; title: string; description: string; status: string }[];
+}
 
 interface WishlistItem {
   id: string;
@@ -19,6 +29,7 @@ interface FeedbackItem {
   id: string;
   text: string;
   title: string | null;
+  description: string | null;
   priority: string | null;
   featureType: string | null;
   status: string;
@@ -31,9 +42,19 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: "text-green-400 bg-green-400/10",
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  pending: "text-yellow-400",
+  extracting: "text-blue-400",
+  transcribing: "text-blue-400",
+  ready: "text-green-400",
+  reviewed: "text-green-400",
+  dismissed: "text-white/20",
+};
+
 export default function PortalProjectPage() {
   const [tab, setTab] = useState<Tab>("preview");
   const [deployUrl, setDeployUrl] = useState<string | null>(null);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
   const [feedbackText, setFeedbackText] = useState("");
@@ -41,6 +62,21 @@ export default function PortalProjectPage() {
   const [submitting, setSubmitting] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Note form
+  const [noteText, setNoteText] = useState("");
+  const [noteSending, setNoteSending] = useState(false);
+
+  // Wishlist form
+  const [showWishlistForm, setShowWishlistForm] = useState(false);
+  const [wishTitle, setWishTitle] = useState("");
+  const [wishDesc, setWishDesc] = useState("");
+  const [wishPriority, setWishPriority] = useState<string>("medium");
+  const [wishSending, setWishSending] = useState(false);
+
+  // Expanded notes
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+
   const router = useRouter();
   const params = useParams();
   const projectId = params.projectId as string;
@@ -79,6 +115,30 @@ export default function PortalProjectPage() {
     }
     loadPreview();
   }, [tab, projectId]);
+
+  // Load notes
+  const loadNotes = useCallback(async () => {
+    const res = await fetch(`/api/portal/projects/${projectId}/notes`);
+    if (res.ok) {
+      const data = await res.json();
+      setNotes(data.notes || []);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (tab === "notes") loadNotes();
+  }, [tab, loadNotes]);
+
+  // Poll notes while processing
+  useEffect(() => {
+    if (tab !== "notes") return;
+    const hasProcessing = notes.some((n) =>
+      ["uploading", "transcribing", "extracting"].includes(n.status)
+    );
+    if (!hasProcessing) return;
+    const interval = setInterval(loadNotes, 3000);
+    return () => clearInterval(interval);
+  }, [tab, notes, loadNotes]);
 
   // Load wishlist
   const loadWishlist = useCallback(async () => {
@@ -133,6 +193,41 @@ export default function PortalProjectPage() {
     }
   }
 
+  async function handleSubmitNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!noteText.trim()) return;
+    setNoteSending(true);
+    const res = await fetch(`/api/portal/projects/${projectId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: noteText.trim(), type: "text_note" }),
+    });
+    if (res.ok) {
+      setNoteText("");
+      loadNotes();
+    }
+    setNoteSending(false);
+  }
+
+  async function handleSubmitWishlist(e: React.FormEvent) {
+    e.preventDefault();
+    if (!wishTitle.trim() || !wishDesc.trim()) return;
+    setWishSending(true);
+    const res = await fetch(`/api/portal/projects/${projectId}/wishlist`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: wishTitle.trim(), description: wishDesc.trim(), priority: wishPriority }),
+    });
+    if (res.ok) {
+      setWishTitle("");
+      setWishDesc("");
+      setWishPriority("medium");
+      setShowWishlistForm(false);
+      loadWishlist();
+    }
+    setWishSending(false);
+  }
+
   async function handleSubmitFeedback(e: React.FormEvent) {
     e.preventDefault();
     if (!feedbackText.trim()) return;
@@ -151,6 +246,15 @@ export default function PortalProjectPage() {
     setSubmitting(false);
   }
 
+  function toggleNoteExpand(id: string) {
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -161,6 +265,7 @@ export default function PortalProjectPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "preview", label: "Preview" },
+    { key: "notes", label: "Notes" },
     { key: "wishlist", label: "Wishlist" },
     { key: "feedback", label: "Feedback" },
   ];
@@ -241,9 +346,154 @@ export default function PortalProjectPage() {
           </div>
         )}
 
+        {/* Notes tab */}
+        {tab === "notes" && (
+          <div className="max-w-2xl mx-auto px-6 py-6">
+            {/* Add note form */}
+            <form onSubmit={handleSubmitNote} className="mb-6">
+              <label className="block text-sm font-medium text-white/50 mb-2">
+                Add a note
+              </label>
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Meeting notes, ideas, observations..."
+                rows={3}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none"
+              />
+              <button
+                type="submit"
+                disabled={noteSending || !noteText.trim()}
+                className="mt-2 px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {noteSending ? "Saving..." : "Save note"}
+              </button>
+            </form>
+
+            {/* Notes list */}
+            {notes.length === 0 ? (
+              <p className="text-sm text-white/30 text-center py-10">No notes yet. Add your first note above.</p>
+            ) : (
+              <div className="space-y-3">
+                {notes.map((note) => {
+                  const isExpanded = expandedNotes.has(note.id);
+                  const content = note.transcript || note.textContent || "";
+                  const isLong = content.length > 200;
+                  const displayContent = isExpanded || !isLong ? content : content.slice(0, 200) + "...";
+                  const noteLabel = note.type === "text_note" ? "Text Note"
+                    : note.type === "audio_upload" ? "Audio Note"
+                    : note.type === "handwritten" ? "Handwritten"
+                    : note.type === "live_video" ? "Live Meeting"
+                    : "Note";
+
+                  return (
+                    <div key={note.id} className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full font-medium text-cyan-400 bg-cyan-400/10">
+                            {noteLabel}
+                          </span>
+                          <span className={`text-[0.6rem] ${STATUS_COLORS[note.status] || "text-white/30"}`}>
+                            {note.status === "ready" ? "Processed" : note.status}
+                          </span>
+                        </div>
+                        <span className="text-xs text-white/20">
+                          {new Date(note.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {content && (
+                        <div>
+                          <p className="text-sm text-white/60 whitespace-pre-wrap">{displayContent}</p>
+                          {isLong && (
+                            <button
+                              onClick={() => toggleNoteExpand(note.id)}
+                              className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+                            >
+                              {isExpanded ? "Show less" : "Show more"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Suggestions from this note */}
+                      {note.suggestions.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+                          <p className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">AI Suggestions</p>
+                          <div className="space-y-1.5">
+                            {note.suggestions.map((s) => (
+                              <div key={s.id} className="bg-white/[0.03] rounded px-3 py-2">
+                                <p className="text-xs font-medium text-white/70">{s.title}</p>
+                                <p className="text-[0.65rem] text-white/40 mt-0.5">{s.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Wishlist tab */}
         {tab === "wishlist" && (
           <div className="max-w-2xl mx-auto px-6 py-6">
+            {/* Add wishlist item button/form */}
+            {showWishlistForm ? (
+              <form onSubmit={handleSubmitWishlist} className="mb-6 bg-white/[0.03] border border-white/[0.08] rounded-lg p-4">
+                <p className="text-sm font-medium text-white/60 mb-3">Request a feature</p>
+                <input
+                  value={wishTitle}
+                  onChange={(e) => setWishTitle(e.target.value)}
+                  placeholder="Feature title"
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 mb-2"
+                  autoFocus
+                />
+                <textarea
+                  value={wishDesc}
+                  onChange={(e) => setWishDesc(e.target.value)}
+                  placeholder="Describe what you need and why..."
+                  rows={3}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none mb-2"
+                />
+                <div className="flex items-center gap-3">
+                  <select
+                    value={wishPriority}
+                    onChange={(e) => setWishPriority(e.target.value)}
+                    className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-white/60 focus:outline-none"
+                  >
+                    <option value="high">High Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="low">Low Priority</option>
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={wishSending || !wishTitle.trim() || !wishDesc.trim()}
+                    className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-red-500 to-blue-500 text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {wishSending ? "Submitting..." : "Submit request"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowWishlistForm(false)}
+                    className="text-xs text-white/30 hover:text-white/50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowWishlistForm(true)}
+                className="mb-6 w-full py-3 rounded-lg border border-dashed border-white/[0.12] text-sm text-white/40 hover:text-white/60 hover:border-white/20 transition-colors"
+              >
+                + Request a feature
+              </button>
+            )}
+
             {wishlistItems.length === 0 ? (
               <p className="text-sm text-white/30 text-center py-10">No wishlist items yet</p>
             ) : (
@@ -359,7 +609,7 @@ export default function PortalProjectPage() {
                       <p className="text-sm text-white/70">{item.text}</p>
                       {item.title && (
                         <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-xs font-medium text-white/50">{item.title}</p>
                             {item.priority && (
                               <span
@@ -376,6 +626,9 @@ export default function PortalProjectPage() {
                               </span>
                             )}
                           </div>
+                          {item.description && (
+                            <p className="text-xs text-white/30 mt-1">{item.description}</p>
+                          )}
                         </div>
                       )}
                     </div>

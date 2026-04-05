@@ -12,7 +12,7 @@ type Props = {
   workspaces: WorkspaceMembership[];
 };
 
-export function PaneClientPortal({ workspaces }: Props) {
+export function PaneClientView({ workspaces }: Props) {
   const allProjects = workspaces.flatMap((m) =>
     m.workspace.clients.flatMap((c: any) =>
       (c.projects || []).map((p: any) => ({
@@ -43,7 +43,7 @@ export function PaneClientPortal({ workspaces }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-[#f1f5f9]">Client Portal</h1>
+        <h1 className="text-xl font-semibold text-[#f1f5f9]">Client View</h1>
       </div>
 
       <div className="mb-4">

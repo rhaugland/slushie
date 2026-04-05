@@ -10,7 +10,7 @@ import { PaneTeam } from "@/components/pane-team";
 import { PaneNotes } from "@/components/pane-notes";
 import { PaneWishlist } from "@/components/pane-wishlist";
 import { PaneFeedback } from "@/components/pane-feedback";
-import { PaneClientPortal } from "@/components/pane-client-portal";
+import { PaneClientView } from "@/components/pane-client-portal";
 import { PaneCostCenter } from "@/components/pane-cost-center";
 import { AddMajorFeature } from "@/components/add-major-feature";
 
@@ -24,7 +24,7 @@ type Selection =
   | { type: "notes" }
   | { type: "wishlist" }
   | { type: "feedback" }
-  | { type: "client-portal" }
+  | { type: "client-view" }
   | { type: "cost-center" }
   | { type: "add-major-feature" };
 
@@ -237,12 +237,12 @@ export default function Home() {
             wishlistActive={selection.type === "wishlist"}
             onFeedback={() => setSelection({ type: "feedback" })}
             feedbackActive={selection.type === "feedback"}
-            onClientPortal={() => {
+            onClientView={() => {
               setSelectedProjectId(null);
               setProject(null);
-              setSelection({ type: "client-portal" });
+              setSelection({ type: "client-view" });
             }}
-            clientPortalActive={selection.type === "client-portal"}
+            clientViewActive={selection.type === "client-view"}
             onCostCenter={() => {
               setSelection({ type: "cost-center" });
             }}
@@ -436,9 +436,9 @@ export default function Home() {
             <p className="text-sm text-white/30">Select a project to view its API costs.</p>
           </div>
         </main>
-      ) : selection.type === "client-portal" ? (
+      ) : selection.type === "client-view" ? (
         <main className="flex-1 p-6 overflow-y-auto">
-          <PaneClientPortal workspaces={workspaces} />
+          <PaneClientView workspaces={workspaces} />
         </main>
       ) : selection.type === "team" ? (
         <main className="flex-1 p-6 overflow-y-auto">
