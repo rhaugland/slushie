@@ -64,6 +64,8 @@ export const transcribe = inngest.createFunction(
         systemPrompt: prompt.system,
         userMessage: prompt.user,
         temperature: 0.1,
+        projectId: meeting.projectId || undefined,
+        action: "transcription",
       });
       let summary: string;
       try {

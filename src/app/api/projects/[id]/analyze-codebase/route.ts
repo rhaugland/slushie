@@ -31,7 +31,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params; // validate route param exists
+  const { id: projectId } = await params;
 
   const body = await req.json();
   const { fileUrl } = body;
@@ -100,6 +100,8 @@ export async function POST(
     userMessage: prompt.user,
     temperature: 0.1,
     maxTokens: 16000,
+    projectId,
+    action: "codebase_analysis",
   });
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);

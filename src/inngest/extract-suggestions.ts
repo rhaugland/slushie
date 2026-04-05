@@ -40,6 +40,8 @@ export const extractSuggestions = inngest.createFunction(
         systemPrompt: prompt.system,
         userMessage: prompt.user,
         temperature: 0.1,
+        projectId: context.projectId,
+        action: "suggestion_extraction",
       });
 
       const jsonMatch = raw.match(/\{[\s\S]*\}/);

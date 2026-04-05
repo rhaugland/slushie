@@ -11,6 +11,7 @@ import { PaneNotes } from "@/components/pane-notes";
 import { PaneWishlist } from "@/components/pane-wishlist";
 import { PaneFeedback } from "@/components/pane-feedback";
 import { PaneClientPortal } from "@/components/pane-client-portal";
+import { PaneCostCenter } from "@/components/pane-cost-center";
 import { AddMajorFeature } from "@/components/add-major-feature";
 
 type Selection =
@@ -24,6 +25,7 @@ type Selection =
   | { type: "wishlist" }
   | { type: "feedback" }
   | { type: "client-portal" }
+  | { type: "cost-center" }
   | { type: "add-major-feature" };
 
 export default function Home() {
@@ -298,7 +300,12 @@ export default function Home() {
           {/* Context pane (hidden in full preview, shares space in half) */}
           {previewMode !== "full" && (
             <main className="flex-1 p-6 overflow-y-auto">
-              {selection.type === "add-major-feature" ? (
+              {selection.type === "cost-center" ? (
+                <PaneCostCenter
+                  projectId={project.id}
+                  projectName={project.name}
+                />
+              ) : selection.type === "add-major-feature" ? (
                 <AddMajorFeature
                   projectId={project.id}
                   projectName={project.name}

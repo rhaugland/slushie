@@ -111,6 +111,9 @@ export const buildFeature = inngest.createFunction(
         userMessage: prompt.user,
         temperature: 0.2,
         maxTokens: 32000,
+        projectId,
+        action: "build",
+        featureId,
       });
 
       const jsonMatch = raw.match(/\{[\s\S]*\}/);

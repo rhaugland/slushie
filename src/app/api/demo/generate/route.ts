@@ -133,6 +133,8 @@ Return JSON array:
   }
 ]`,
     temperature: 0.7,
+    projectId: project.id,
+    action: "demo_generation",
   });
 
   const notes = JSON.parse(raw);
@@ -176,6 +178,8 @@ Return JSON array:
   }
 ]`,
     temperature: 0.7,
+    projectId: project.id,
+    action: "demo_generation",
   });
 
   const items = JSON.parse(raw);
@@ -227,6 +231,8 @@ Return JSON array:
   }
 ]`,
     temperature: 0.7,
+    projectId: project.id,
+    action: "demo_generation",
   });
 
   const items = JSON.parse(raw);

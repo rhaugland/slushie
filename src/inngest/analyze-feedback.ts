@@ -28,6 +28,8 @@ export const analyzeFeedback = inngest.createFunction(
         systemPrompt: prompt.system,
         userMessage: prompt.user,
         temperature: 0.1,
+        projectId: feedbackItem.projectId,
+        action: "feedback_analysis",
       });
 
       const jsonMatch = raw.match(/\{[\s\S]*\}/);

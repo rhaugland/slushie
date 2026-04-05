@@ -107,6 +107,7 @@ model Project {
   clientMemberAccess ClientMemberProject[]
   wishlistItems WishlistItem[]
   feedbackItems FeedbackItem[]
+  costEntries  CostEntry[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -274,6 +275,24 @@ model WishlistVote {
 
   @@unique([wishlistItemId, clientMemberId])
   @@index([wishlistItemId])
+}
+
+model CostEntry {
+  id           String   @id @default(cuid())
+  projectId    String
+  action       String   // build, feedback_analysis, suggestion_extraction, classification, transcription, demo_generation, codebase_analysis
+  model        String   @default("claude-sonnet-4-6")
+  inputTokens  Int
+  outputTokens Int
+  costCents    Float    // cost in cents
+  featureId    String?
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+  @@index([action])
 }
 
 model LiveRoom {

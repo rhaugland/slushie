@@ -85,11 +85,14 @@ export const processNote = inngest.createFunction(
         return;
       }
 
+      const meeting = await prisma.meeting.findUniqueOrThrow({ where: { id: meetingId } });
       const prompt = noteSummarizerPrompt(transcript);
       const raw = await callClaude({
         systemPrompt: prompt.system,
         userMessage: prompt.user,
         temperature: 0.1,
+        projectId: meeting.projectId || undefined,
+        action: "transcription",
       });
 
       let summary: string;

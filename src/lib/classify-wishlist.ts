@@ -37,6 +37,8 @@ Respond with JSON only: {"featureType": "major" or "minor", "suggestedParent": "
 If major, suggestedParent must be null. If minor, suggestedParent should be the exact title of the most relevant existing major feature, or null if none fit.`,
     temperature: 0.1,
     maxTokens: 200,
+    projectId: item.projectId || undefined,
+    action: "classification",
   });
 
   let featureType = "major";

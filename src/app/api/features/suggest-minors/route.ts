@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser as getUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic();
+import { callClaude } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
-  const user = await getUser(req);
+  const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { title, description, projectName, projectId } = await req.json();
@@ -15,7 +13,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title and description required" }, { status: 400 });
   }
 
-  // Get existing routes to help AI understand the app's routing structure
   let existingRoutes: string[] = [];
   if (projectId) {
     const features = await prisma.feature.findMany({
@@ -29,13 +26,9 @@ export async function POST(req: NextRequest) {
     ? `\n\nExisting routes in the app: ${existingRoutes.join(", ")}\nNew routes MUST follow the same prefix pattern as existing routes (e.g. if existing routes start with /admin/, new routes must also start with /admin/).`
     : "";
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: `You are helping plan features for a web application called "${projectName || "the app"}".
+  const text = await callClaude({
+    systemPrompt: "You suggest sub-features for web application features. Respond with JSON only, no markdown.",
+    userMessage: `You are helping plan features for a web application called "${projectName || "the app"}".
 
 A major feature section is being created:
 Title: "${title}"
@@ -49,11 +42,10 @@ Respond ONLY with valid JSON — no markdown, no code fences, no explanation. Th
 ]
 
 Keep titles short (2-4 words). Descriptions should be specific and actionable. Routes must follow the existing route patterns.`,
-      },
-    ],
+    maxTokens: 1024,
+    projectId: projectId || undefined,
+    action: "suggest_minors",
   });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
 
   try {
     const suggestions = JSON.parse(text.trim());

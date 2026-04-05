@@ -43,7 +43,8 @@ type TeamMember = {
 type Selection =
   | { type: "project" }
   | { type: "feature"; id: string }
-  | { type: "meeting"; id: string };
+  | { type: "meeting"; id: string }
+  | { type: "cost-center" };
 
 type Props = {
   project: Project;
@@ -395,6 +396,24 @@ export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeatu
             })}
           </div>
         )}
+      </div>
+
+      {/* Cost Center */}
+      <div className="pt-3 border-t border-white/[0.06]">
+        <button
+          onClick={() => onSelect({ type: "cost-center" })}
+          className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs transition-colors ${
+            selection.type === "cost-center"
+              ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
+              : "text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+          }`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="1" x2="12" y2="23" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          Cost Center
+        </button>
       </div>
     </div>
   );
