@@ -71,6 +71,7 @@ export async function POST(
     data: {
       projectId: id,
       clientMemberId,
+      source: "client",
       text: text.trim(),
       status: "pending",
     },

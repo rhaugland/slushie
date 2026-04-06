@@ -157,10 +157,12 @@ export async function destroySession() {}
     });
 
     await step.run("update-project", async () => {
+      const baseUrl = process.env.PREVIEW_BASE_URL || `http://localhost:${port}`;
+      const deployUrl = baseUrl.includes("localhost") ? `http://localhost:${port}` : `${baseUrl}/${port}`;
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          deployUrl: `http://localhost:${port}`,
+          deployUrl,
           deployStatus: "running",
           port,
         },

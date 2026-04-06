@@ -10,6 +10,7 @@ type FeedbackItemData = {
   description: string | null;
   priority: string | null;
   featureType: string | null;
+  source: string;
   status: string;
   wishlistItemId: string | null;
   projectId: string;
@@ -58,6 +59,7 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
   const [movingItem, setMovingItem] = useState<FeedbackItemData | null>(null);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "internal" | "client">("all");
 
   async function generateSamples() {
     if (!selectedProjectId || generating) return;
@@ -142,9 +144,10 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
     loadItems();
   }
 
-  const reviewed = items.filter((i) => i.status === "reviewed");
-  const pending = items.filter((i) => i.status === "pending");
-  const dismissed = items.filter((i) => i.status === "dismissed");
+  const filtered = items.filter((i) => sourceFilter === "all" || (i.source || "internal") === sourceFilter);
+  const reviewed = filtered.filter((i) => i.status === "reviewed");
+  const pending = filtered.filter((i) => i.status === "pending");
+  const dismissed = filtered.filter((i) => i.status === "dismissed");
 
   return (
     <div>
@@ -262,8 +265,8 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
         </div>
       )}
 
-      {/* Project selector */}
-      <div className="mb-4">
+      {/* Project selector + source filter */}
+      <div className="mb-4 flex gap-2">
         <select
           value={selectedProjectId}
           onChange={(e) => { setSelectedProjectId(e.target.value); setExpandedId(null); }}
@@ -274,6 +277,15 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
               {p.clientName} / {p.name}
             </option>
           ))}
+        </select>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value as "all" | "internal" | "client")}
+          className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-white/20"
+        >
+          <option value="all" className="bg-[#0c1120]">All Sources</option>
+          <option value="internal" className="bg-[#0c1120]">Internal</option>
+          <option value="client" className="bg-[#0c1120]">Client</option>
         </select>
       </div>
 
@@ -293,7 +305,12 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
               <div className="space-y-2">
                 {pending.map((item) => (
                   <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                    <div className="text-xs text-white/40 truncate">{item.text}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-white/40 truncate flex-1">{item.text}</div>
+                      {(item.source || "internal") === "client" && (
+                        <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 text-[0.6rem] text-yellow-400/60 mt-1">
                       <span className="w-2 h-2 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
                       Analyzing...
@@ -327,6 +344,9 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {(item.source || "internal") === "client" && (
+                          <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
+                        )}
                         {item.priority && (
                           <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${PRIORITY_COLORS[item.priority] || ""}`}>
                             {item.priority}
@@ -389,7 +409,12 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
                   {dismissed.map((item) => (
                     <div key={item.id} className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-4 py-3 flex items-center justify-between">
                       <div>
-                        <div className="text-xs text-white/30">{item.title}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white/30">{item.title}</span>
+                          {(item.source || "internal") === "client" && (
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
+                          )}
+                        </div>
                         <div className="text-[0.6rem] text-white/15">{item.text.slice(0, 80)}{item.text.length > 80 ? "..." : ""}</div>
                       </div>
                       <button

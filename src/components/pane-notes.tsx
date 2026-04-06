@@ -14,6 +14,7 @@ type Suggestion = {
 type MeetingNote = {
   id: string;
   type: string;
+  source: string;
   status: string;
   summary: string | null;
   transcript: string | null;
@@ -21,6 +22,8 @@ type MeetingNote = {
   audioUrl: string | null;
   imageUrl: string | null;
   createdAt: string;
+  createdByName: string | null;
+  createdBy: { id: string; name: string } | null;
   project: { id: string; name: string } | null;
   suggestions: Suggestion[];
   wishlistItems: { id: string; status: string }[];
@@ -58,6 +61,7 @@ export function PaneNotes({ workspaces }: Props) {
   );
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(allProjects[0]?.id || "");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "internal" | "client">("all");
   const [notes, setNotes] = useState<MeetingNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -191,7 +195,7 @@ export function PaneNotes({ workspaces }: Props) {
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex gap-2">
         <select
           value={selectedProjectId}
           onChange={(e) => { setSelectedProjectId(e.target.value); setExpandedNoteId(null); }}
@@ -202,6 +206,15 @@ export function PaneNotes({ workspaces }: Props) {
               {p.clientName} / {p.name}
             </option>
           ))}
+        </select>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value as "all" | "internal" | "client")}
+          className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-white/20"
+        >
+          <option value="all" className="bg-[#0c1120]">All Sources</option>
+          <option value="internal" className="bg-[#0c1120]">Internal</option>
+          <option value="client" className="bg-[#0c1120]">Client</option>
         </select>
       </div>
 
@@ -283,7 +296,7 @@ export function PaneNotes({ workspaces }: Props) {
         <p className="text-sm text-white/30">No notes yet. Create one to get started.</p>
       ) : (
         <div className="space-y-2">
-          {notes.map((note) => (
+          {notes.filter((n) => sourceFilter === "all" || (n.source || "internal") === sourceFilter).map((note) => (
             <NoteCard
               key={note.id}
               note={note}
@@ -353,6 +366,11 @@ function NoteCard({ note, expanded, onToggle, onDelete, onReload }: {
         <span className="text-[0.6rem] text-white/30 uppercase shrink-0 w-10">
           {TYPE_ICONS[note.type] || "Note"}
         </span>
+        {note.source === "client" && (
+          <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">
+            Client
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="text-xs text-white/60">
             {new Date(note.createdAt).toLocaleDateString("en-US", {
@@ -362,6 +380,9 @@ function NoteCard({ note, expanded, onToggle, onDelete, onReload }: {
             })}
             {note.project && (
               <span className="text-white/30 ml-2">{note.project.name}</span>
+            )}
+            {(note.createdByName || note.createdBy?.name) && (
+              <span className="text-white/25 ml-2">by {note.createdByName || note.createdBy?.name}</span>
             )}
           </div>
           {isProcessing ? (

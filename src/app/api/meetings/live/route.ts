@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
       projectId: projectId || null,
       type: "live_video",
       status: "uploading",
+      createdById: user.id,
+      createdByName: user.name,
     },
   });
 

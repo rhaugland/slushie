@@ -87,7 +87,7 @@ export async function POST(
       clientId,
       projectId: id,
       priority: priority || null,
-      source: "portal",
+      source: "client",
       status: "pending",
     },
   });

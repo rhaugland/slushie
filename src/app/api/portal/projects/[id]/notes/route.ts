@@ -24,6 +24,7 @@ export async function GET(
       suggestions: {
         select: { id: true, suggestedTitle: true, suggestedDescription: true, status: true },
       },
+      createdBy: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -31,10 +32,12 @@ export async function GET(
   const notes = meetings.map((m) => ({
     id: m.id,
     type: m.type,
+    source: m.source,
     textContent: m.textContent,
     transcript: m.transcript,
     status: m.status,
     createdAt: m.createdAt,
+    createdByName: m.createdByName || m.createdBy?.name || null,
     suggestions: m.suggestions.map((s) => ({
       id: s.id,
       title: s.suggestedTitle,
@@ -74,8 +77,11 @@ export async function POST(
       clientId: project.clientId,
       projectId: id,
       type: type || "text_note",
+      source: "client",
       textContent: text.trim(),
       status: "extracting",
+      createdById: user.id,
+      createdByName: user.name,
     },
   });
 

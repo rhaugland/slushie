@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser(req);
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clientId = req.nextUrl.searchParams.get("clientId");
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       suggestions: true,
       project: { select: { id: true, name: true } },
       wishlistItems: { select: { id: true, status: true } },
+      createdBy: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser(req);
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest) {
       textContent: textContent || null,
       imageUrl: imageUrl || null,
       status: initialStatus,
+      createdById: user.id,
+      createdByName: user.name,
     },
   });
 

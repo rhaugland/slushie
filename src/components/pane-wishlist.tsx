@@ -67,6 +67,7 @@ export function PaneWishlist({ workspaces, onUpdate }: Props) {
   const [editFeatureType, setEditFeatureType] = useState<string>("");
   const [editSuggestedParent, setEditSuggestedParent] = useState<string>("");
   const [showParentSuggestions, setShowParentSuggestions] = useState(false);
+  const [filterSource, setFilterSource] = useState("");
 
   const [showAdd, setShowAdd] = useState(false);
   const [addTitle, setAddTitle] = useState("");
@@ -205,8 +206,9 @@ export function PaneWishlist({ workspaces, onUpdate }: Props) {
       })
     : allProjects;
 
-  const pendingItems = items.filter((i) => i.status === "pending");
-  const dismissedItems = items.filter((i) => i.status === "dismissed");
+  const sourceFiltered = filterSource ? items.filter((i) => i.source === filterSource) : items;
+  const pendingItems = sourceFiltered.filter((i) => i.status === "pending");
+  const dismissedItems = sourceFiltered.filter((i) => i.status === "dismissed");
 
   return (
     <div>
@@ -259,6 +261,17 @@ export function PaneWishlist({ workspaces, onUpdate }: Props) {
           <option value="high" className="bg-[#0c1120]">High</option>
           <option value="medium" className="bg-[#0c1120]">Medium</option>
           <option value="low" className="bg-[#0c1120]">Low</option>
+        </select>
+        <select
+          value={filterSource}
+          onChange={(e) => setFilterSource(e.target.value)}
+          className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white/60 focus:outline-none focus:border-white/20"
+        >
+          <option value="" className="bg-[#0c1120]">All sources</option>
+          <option value="meeting" className="bg-[#0c1120]">Notes</option>
+          <option value="feedback" className="bg-[#0c1120]">Feedback</option>
+          <option value="client" className="bg-[#0c1120]">Client</option>
+          <option value="manual" className="bg-[#0c1120]">Manual</option>
         </select>
       </div>
 
@@ -337,9 +350,10 @@ export function PaneWishlist({ workspaces, onUpdate }: Props) {
                     </button>
                     <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${
                       item.source === "feedback" ? "text-purple-400 bg-purple-500/10" :
+                      item.source === "client" ? "text-orange-400 bg-orange-400/10" :
                       "text-blue-400 bg-blue-500/10"
                     }`}>
-                      {item.source === "feedback" ? "Feedback" : "Note"}
+                      {item.source === "feedback" ? "Feedback" : item.source === "client" ? "Client" : "Note"}
                     </span>
                     {item.featureType && editingId !== item.id && (
                       <button
