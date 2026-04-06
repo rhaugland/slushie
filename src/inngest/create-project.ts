@@ -6,6 +6,7 @@ import { cp } from "fs/promises";
 import path from "path";
 
 const execAsync = promisify(exec);
+const isProduction = process.env.NODE_ENV === "production";
 
 export const createProject = inngest.createFunction(
   {
@@ -20,50 +21,91 @@ export const createProject = inngest.createFunction(
       return prisma.project.findUniqueOrThrow({ where: { id: projectId } });
     });
 
-    const projectDir = await step.run("copy-shell", async () => {
-      const slug = project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
-      const dir = path.join(process.cwd(), "previews", slug);
-      const templateDir = path.join(process.cwd(), "templates", "base-shell");
+    if (isProduction) {
+      // In production, deploy to Vercel
+      const projectDir = await step.run("copy-shell", async () => {
+        const slug = project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const dir = path.join(process.cwd(), "previews", slug);
+        const templateDir = path.join(process.cwd(), "templates", "base-shell");
 
-      await cp(templateDir, dir, { recursive: true });
+        await cp(templateDir, dir, { recursive: true });
 
-      await prisma.project.update({
-        where: { id: projectId },
-        data: { deployStatus: "starting" },
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { deployStatus: "starting" },
+        });
+
+        return dir;
       });
 
-      return dir;
-    });
+      const result = await step.run("deploy-to-vercel", async () => {
+        await execAsync("npm install --legacy-peer-deps 2>&1", {
+          cwd: projectDir,
+          timeout: 120000,
+        });
 
-    const port = await step.run("install-and-start", async () => {
-      await execAsync("npm install --legacy-peer-deps 2>&1", {
-        cwd: projectDir,
-        timeout: 120000,
+        const { deployToVercel } = await import("@/lib/vercel-deploy");
+        const { url, deploymentId } = await deployToVercel(projectDir, project.name);
+        return { url, deploymentId };
       });
 
-      const portNum = 4000 + (parseInt(projectId.slice(-4), 36) % 1000);
-
-      exec(
-        `nohup bash -c 'PORT=${portNum} npm run dev' > /tmp/slushie-project-${portNum}.log 2>&1 &`,
-        { cwd: projectDir }
-      );
-
-      return portNum;
-    });
-
-    await step.run("update-project", async () => {
-      const url = `http://localhost:${port}`;
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          deployUrl: url,
-          deployStatus: "running",
-          port,
-        },
+      await step.run("update-project", async () => {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            deployUrl: result.url,
+            deployStatus: "running",
+            port: null,
+          },
+        });
       });
-      return url;
-    });
 
-    return { projectId, port };
+      return { projectId, url: result.url };
+    } else {
+      // In development, spawn local dev server
+      const projectDir = await step.run("copy-shell", async () => {
+        const slug = project.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const dir = path.join(process.cwd(), "previews", slug);
+        const templateDir = path.join(process.cwd(), "templates", "base-shell");
+
+        await cp(templateDir, dir, { recursive: true });
+
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { deployStatus: "starting" },
+        });
+
+        return dir;
+      });
+
+      const port = await step.run("install-and-start", async () => {
+        await execAsync("npm install --legacy-peer-deps 2>&1", {
+          cwd: projectDir,
+          timeout: 120000,
+        });
+
+        const portNum = 4000 + (parseInt(projectId.slice(-4), 36) % 1000);
+
+        exec(
+          `nohup bash -c 'PORT=${portNum} npm run dev' > /tmp/slushie-project-${portNum}.log 2>&1 &`,
+          { cwd: projectDir }
+        );
+
+        return portNum;
+      });
+
+      await step.run("update-project", async () => {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            deployUrl: `http://localhost:${port}`,
+            deployStatus: "running",
+            port,
+          },
+        });
+      });
+
+      return { projectId, port };
+    }
   }
 );

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 // GET — authenticated, list feedback for a project
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser(req);
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const projectId = req.nextUrl.searchParams.get("projectId");

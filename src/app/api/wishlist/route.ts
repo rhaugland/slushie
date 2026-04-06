@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { classifyWishlistItem } from "@/lib/classify-wishlist";
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser(req);
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clientId = req.nextUrl.searchParams.get("clientId");
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser(req);
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { title, description, clientId, projectId, priority } = await req.json();
