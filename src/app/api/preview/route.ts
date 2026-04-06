@@ -7,9 +7,9 @@ function proxyPath(path: string, projectId: string): string {
   return `/api/preview${path}${sep}projectId=${projectId}`;
 }
 
-function rewriteHtml(html: string, port: number, projectId: string, disabledRoutes: string[] = []): string {
-  const base = `http://localhost:${port}`;
-  html = html.replace(new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
+function rewriteHtml(html: string, baseUrl: string, projectId: string, disabledRoutes: string[] = []): string {
+  // Strip the upstream base URL from absolute references
+  html = html.replace(new RegExp(baseUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
 
   html = html.replace(
     /((?:src|href|srcSet|srcset)\s*=\s*")((?:[^"]*))(")/gi,
@@ -44,7 +44,6 @@ function rewriteHtml(html: string, port: number, projectId: string, disabledRout
     };
   </script>`;
 
-  // Feature flag script: hide links/nav items pointing to disabled routes
   const featureFlagTag = disabledRoutes.length > 0 ? `<script>
     window.__DISABLED_ROUTES__ = ${JSON.stringify(disabledRoutes)};
     function hideDisabledLinks() {
@@ -76,6 +75,16 @@ function rewriteHtml(html: string, port: number, projectId: string, disabledRout
   return html;
 }
 
+function getUpstreamBase(project: { port: number | null; deployUrl: string | null }): string | null {
+  if (project.deployUrl && !project.deployUrl.includes("localhost")) {
+    return project.deployUrl;
+  }
+  if (project.port) {
+    return `http://localhost:${project.port}`;
+  }
+  return project.deployUrl || null;
+}
+
 async function getDisabledRoutes(projectId: string): Promise<string[]> {
   const disabledFeatures = await prisma.feature.findMany({
     where: {
@@ -90,7 +99,6 @@ async function getDisabledRoutes(projectId: string): Promise<string[]> {
     .map(f => f.route)
     .filter((r): r is string => r !== null);
 
-  // For disabled major features, also collect all child routes
   const disabledMajorIds = disabledFeatures
     .filter(f => !f.parentId)
     .map(f => f.id);
@@ -122,27 +130,30 @@ export async function GET(req: NextRequest) {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { port: true, deployStatus: true },
+    select: { port: true, deployUrl: true, deployStatus: true },
   });
 
-  if (!project?.port || project.deployStatus !== "running") {
+  if (!project || project.deployStatus !== "running") {
     return NextResponse.json({ error: "Preview not running" }, { status: 503 });
+  }
+
+  const upstreamBase = getUpstreamBase(project);
+  if (!upstreamBase) {
+    return NextResponse.json({ error: "No preview URL configured" }, { status: 503 });
   }
 
   const disabledRoutes = await getDisabledRoutes(projectId);
 
   try {
-    // Use redirect: "manual" to check if root redirects to a disabled route
-    const upstream = await fetch(`http://localhost:${project.port}/`, {
+    const upstream = await fetch(`${upstreamBase}/`, {
       headers: { "Accept": req.headers.get("accept") || "*/*", "Accept-Encoding": "identity" },
       redirect: "manual",
     });
 
-    // If root redirects to a disabled route, return blank page
     if (upstream.status >= 300 && upstream.status < 400) {
       const location = upstream.headers.get("location");
       if (location) {
-        const redirectPath = location.replace(`http://localhost:${project.port}`, "");
+        const redirectPath = location.replace(upstreamBase, "");
         if (disabledRoutes.some(r => redirectPath === r || redirectPath.startsWith(r + "/"))) {
           const blankHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#0a0f1a"></body></html>`;
           return new NextResponse(blankHtml, {
@@ -150,15 +161,14 @@ export async function GET(req: NextRequest) {
             headers: { "Content-Type": "text/html" },
           });
         }
-        // Not disabled — follow the redirect manually
-        const followed = await fetch(`http://localhost:${project.port}${redirectPath}`, {
+        const followed = await fetch(`${upstreamBase}${redirectPath}`, {
           headers: { "Accept": req.headers.get("accept") || "*/*", "Accept-Encoding": "identity" },
           redirect: "follow",
         });
         const contentType = followed.headers.get("content-type") || "text/html";
         const body = await followed.arrayBuffer();
         if (contentType.includes("text/html")) {
-          const html = rewriteHtml(new TextDecoder().decode(body), project.port, projectId, disabledRoutes);
+          const html = rewriteHtml(new TextDecoder().decode(body), upstreamBase, projectId, disabledRoutes);
           return new NextResponse(html, { status: 200, headers: { "Content-Type": contentType } });
         }
         return new NextResponse(body, { status: followed.status, headers: { "Content-Type": contentType } });
@@ -171,7 +181,7 @@ export async function GET(req: NextRequest) {
     if (contentType.includes("text/html")) {
       const html = rewriteHtml(
         new TextDecoder().decode(body),
-        project.port,
+        upstreamBase,
         projectId,
         disabledRoutes
       );

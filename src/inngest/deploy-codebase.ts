@@ -10,6 +10,7 @@ import { promisify } from "util";
 import path from "path";
 
 const execAsync = promisify(exec);
+const isProduction = process.env.NODE_ENV === "production";
 
 export const deployCodebase = inngest.createFunction(
   {
@@ -61,7 +62,7 @@ export const deployCodebase = inngest.createFunction(
       return dir;
     });
 
-    const framework = await step.run("detect-framework", async () => {
+    await step.run("detect-framework", async () => {
       const fw = await detectFramework(projectDir);
       return { name: fw.name, startCmd: fw.startCommand(0).replace("0", "__PORT__") };
     });
@@ -137,38 +138,70 @@ export async function destroySession() {}
       );
     });
 
-    const port = await step.run("install-and-start", async () => {
-      await execAsync("npm install --legacy-peer-deps 2>&1", {
-        cwd: projectDir,
-        timeout: 180000,
+    if (isProduction) {
+      // --- Production: deploy to Vercel ---
+      const result = await step.run("deploy-to-vercel", async () => {
+        // Install deps first so Vercel gets a complete project
+        await execAsync("npm install --legacy-peer-deps 2>&1", {
+          cwd: projectDir,
+          timeout: 180000,
+        });
+
+        const { deployToVercel } = await import("@/lib/vercel-deploy");
+        const { url, deploymentId } = await deployToVercel(projectDir, project.name);
+        return { url, deploymentId };
       });
 
-      const portNum = 4000 + (parseInt(projectId.slice(-4), 36) % 1000);
-
-      const fw = await detectFramework(projectDir);
-      const cmd = fw.startCommand(portNum);
-
-      exec(
-        `nohup bash -c '${cmd}' > /tmp/slushie-project-${portNum}.log 2>&1 &`,
-        { cwd: projectDir }
-      );
-
-      return portNum;
-    });
-
-    await step.run("update-project", async () => {
-      const baseUrl = process.env.PREVIEW_BASE_URL || `http://localhost:${port}`;
-      const deployUrl = baseUrl.includes("localhost") ? `http://localhost:${port}` : `${baseUrl}/${port}`;
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          deployUrl,
-          deployStatus: "running",
-          port,
-        },
+      await step.run("update-project-vercel", async () => {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            deployUrl: result.url,
+            deployStatus: "running",
+            port: null,
+          },
+        });
       });
-    });
 
-    return { projectId, port };
+      // Clean up extracted files
+      await step.run("cleanup", async () => {
+        try { await rm(projectDir, { recursive: true, force: true }); } catch {}
+      });
+
+      return { projectId, url: result.url };
+    } else {
+      // --- Development: spawn local dev server ---
+      const port = await step.run("install-and-start", async () => {
+        await execAsync("npm install --legacy-peer-deps 2>&1", {
+          cwd: projectDir,
+          timeout: 180000,
+        });
+
+        const portNum = 4000 + (parseInt(projectId.slice(-4), 36) % 1000);
+
+        const fw = await detectFramework(projectDir);
+        const cmd = fw.startCommand(portNum);
+
+        exec(
+          `nohup bash -c '${cmd}' > /tmp/slushie-project-${portNum}.log 2>&1 &`,
+          { cwd: projectDir }
+        );
+
+        return portNum;
+      });
+
+      await step.run("update-project", async () => {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            deployUrl: `http://localhost:${port}`,
+            deployStatus: "running",
+            port,
+          },
+        });
+      });
+
+      return { projectId, port };
+    }
   }
 );

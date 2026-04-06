@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function getUpstreamBase(project: { port: number | null; deployUrl: string | null }): string | null {
+  if (project.deployUrl && !project.deployUrl.includes("localhost")) {
+    return project.deployUrl;
+  }
+  if (project.port) {
+    return `http://localhost:${project.port}`;
+  }
+  return project.deployUrl || null;
+}
+
 async function getProject(projectId: string) {
   return prisma.project.findUnique({
     where: { id: projectId },
-    select: { port: true, deployStatus: true },
+    select: { port: true, deployUrl: true, deployStatus: true },
   });
 }
 
-/**
- * Get all disabled feature routes for a project.
- * Includes routes from disabled major features (and all their children)
- * as well as individually disabled minor features.
- */
 async function getDisabledRoutes(projectId: string): Promise<string[]> {
-  // Get all disabled features (both major and minor)
   const disabledFeatures = await prisma.feature.findMany({
     where: {
       projectId,
@@ -28,7 +32,6 @@ async function getDisabledRoutes(projectId: string): Promise<string[]> {
     .map(f => f.route)
     .filter((r): r is string => r !== null);
 
-  // For disabled major features, also collect all child routes
   const disabledMajorIds = disabledFeatures
     .filter(f => !f.parentId)
     .map(f => f.id);
@@ -64,24 +67,20 @@ function proxyPath(path: string, projectId: string): string {
 }
 
 function rewriteCss(css: string, projectId: string): string {
-  // Rewrite url() references in CSS files (fonts, background images, etc.)
   return css.replace(
     /(url\(\s*['"]?)(\/(?!api\/preview)[^'")]*?)(['"]?\s*\))/g,
     (_m, pre, path, post) => `${pre}${proxyPath(path, projectId)}${post}`
   );
 }
 
-function rewriteHtml(html: string, port: number, projectId: string, isolate: boolean = false, disabledRoutes: string[] = []): string {
-  const base = `http://localhost:${port}`;
-
-  // Rewrite absolute localhost URLs
-  html = html.replace(new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
+function rewriteHtml(html: string, upstreamBase: string, projectId: string, isolate: boolean = false, disabledRoutes: string[] = []): string {
+  // Strip upstream base URL
+  html = html.replace(new RegExp(upstreamBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
 
   // Rewrite src, href, srcSet attributes with absolute paths
   html = html.replace(
     /((?:src|href|srcSet|srcset)\s*=\s*")((?:[^"]*))(")/gi,
     (_m, pre, value, post) => {
-      // srcSet has multiple entries separated by commas
       if (/srcset/i.test(pre)) {
         const rewritten = value.replace(
           /(\/[^\s,]+)/g,
@@ -92,7 +91,6 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
         );
         return `${pre}${rewritten}${post}`;
       }
-      // Regular src/href — single path
       if (value.startsWith("/") && !value.startsWith("/api/preview")) {
         return `${pre}${proxyPath(value, projectId)}${post}`;
       }
@@ -100,16 +98,13 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
     }
   );
 
-  // Rewrite url() in inline styles (for background images etc)
+  // Rewrite url() in inline styles
   html = html.replace(
     /(url\(\s*['"]?)(\/(?!api\/preview)[^'")]*?)(['"]?\s*\))/g,
     (_m, pre, path, post) => proxyPath(path, projectId) ? `${pre}${proxyPath(path, projectId)}${post}` : _m
   );
 
-  // Inject a <base> tag fallback: intercept fetch/XHR for dynamic loads
-  // Also add a meta tag so the browser resolves relative URLs through proxy
   const baseTag = `<script>
-    // Patch fetch to route through preview proxy
     const _origFetch = window.fetch;
     window.fetch = function(url, opts) {
       if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('/api/preview')) {
@@ -120,7 +115,6 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
     };
   </script>`;
 
-  // Feature flag script: hide links/nav items pointing to disabled routes
   const featureFlagTag = disabledRoutes.length > 0 ? `<script>
     window.__DISABLED_ROUTES__ = ${JSON.stringify(disabledRoutes)};
     function hideDisabledLinks() {
@@ -143,7 +137,6 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
     new MutationObserver(hideDisabledLinks).observe(document.documentElement, { childList: true, subtree: true });
   </script>` : "";
 
-  // Isolation mode: hide nav, header, footer, sidebar — show only main content
   const isolationTag = isolate ? `<style id="slushie-isolate">
     nav, header, footer, aside,
     [role="navigation"], [role="banner"], [role="contentinfo"],
@@ -152,7 +145,6 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
     .layout-header, .layout-footer, .layout-sidebar {
       display: none !important;
     }
-    /* Remove layout padding/margins that assume nav exists */
     main, [role="main"], .main-content, .content, .page-content {
       margin: 0 !important;
       padding: 16px !important;
@@ -164,7 +156,6 @@ function rewriteHtml(html: string, port: number, projectId: string, isolate: boo
     }
   </style>` : "";
 
-  // Insert before </head> or at the start
   if (html.includes("</head>")) {
     html = html.replace("</head>", baseTag + featureFlagTag + isolationTag + "</head>");
   } else {
@@ -183,12 +174,17 @@ async function proxyRequest(
 ) {
   const project = await getProject(projectId);
 
-  if (!project?.port || project.deployStatus !== "running") {
+  if (!project || project.deployStatus !== "running") {
     return NextResponse.json({ error: "Preview not running" }, { status: 503 });
   }
 
+  const upstreamBase = getUpstreamBase(project);
+  if (!upstreamBase) {
+    return NextResponse.json({ error: "No preview URL configured" }, { status: 503 });
+  }
+
   // Forward query params (except projectId) to upstream
-  const upstreamUrl = new URL(`http://localhost:${project.port}${targetPath}`);
+  const upstreamUrl = new URL(`${upstreamBase}${targetPath}`);
   req.nextUrl.searchParams.forEach((val, key) => {
     if (key !== "projectId" && key !== "isolate") upstreamUrl.searchParams.set(key, val);
   });
@@ -206,13 +202,8 @@ async function proxyRequest(
     if (upstream.status >= 300 && upstream.status < 400) {
       const location = upstream.headers.get("location");
       if (location) {
-        let proxied = location.replace(
-          `http://localhost:${project.port}`,
-          ""
-        );
+        let proxied = location.replace(upstreamBase, "");
 
-        // If it's a relative path, prefix with proxy
-        // Use manual Location header to keep it relative (NextResponse.redirect makes it absolute with localhost)
         if (proxied.startsWith("/")) {
           const sep = proxied.includes("?") ? "&" : "?";
           return new NextResponse(null, {
@@ -230,7 +221,7 @@ async function proxyRequest(
     if (contentType.includes("text/html")) {
       const html = rewriteHtml(
         new TextDecoder().decode(body),
-        project.port,
+        upstreamBase,
         projectId,
         isolate,
         disabledRoutes
@@ -241,7 +232,7 @@ async function proxyRequest(
       });
     }
 
-    // Rewrite CSS responses (font-face url(), background-image, etc.)
+    // Rewrite CSS responses
     if (contentType.includes("text/css")) {
       const css = rewriteCss(new TextDecoder().decode(body), projectId);
       return new NextResponse(css, {
@@ -250,7 +241,7 @@ async function proxyRequest(
       });
     }
 
-    // Pass through all other content types (JS, images, fonts, etc.)
+    // Pass through all other content types
     return new NextResponse(body, {
       status: upstream.status,
       headers: {
@@ -282,7 +273,7 @@ export async function GET(
 
   const disabledRoutes = await getDisabledRoutes(projectId);
 
-  // If this path matches a disabled micro feature route, return blank page
+  // If this path matches a disabled feature route, return blank page
   if (disabledRoutes.some(r => targetPath === r || targetPath.startsWith(r + "/"))) {
     return new NextResponse(disabledPageHtml(), {
       status: 200,
