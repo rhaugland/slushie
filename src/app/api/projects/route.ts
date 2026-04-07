@@ -64,10 +64,13 @@ export async function POST(req: NextRequest) {
     data: { name, clientId, workspaceId: client.workspaceId },
   });
 
-  const { inngest } = await import("@/inngest/client");
-  await inngest.send({ name: "project/create", data: { projectId: project.id } });
+  // Fire-and-forget: trigger Inngest project creation (non-blocking)
+  import("@/inngest/client")
+    .then(({ inngest }) => inngest.send({ name: "project/create", data: { projectId: project.id } }))
+    .catch(() => {});
 
-  // Seed demo data into new project
+  // Seed demo data into new project (wrapped so failures don't break project creation)
+  try {
   const now = Date.now();
 
   const noteData = [
@@ -193,6 +196,9 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(now - a.hoursAgo * 3600000),
     })),
   });
+  } catch (e) {
+    console.error("Seed failed (non-fatal):", e);
+  }
 
   return NextResponse.json(project, { status: 201 });
 }
