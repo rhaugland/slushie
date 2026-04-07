@@ -214,7 +214,7 @@ export function ProjectSidebar({
   const [newMenuClientId, setNewMenuClientId] = useState<string | null>(null);
 
   return (
-    <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 h-screen flex flex-col overflow-hidden">
+    <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 h-screen overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
         <button onClick={onHome} className="text-sm font-bold tracking-tight hover:opacity-80 transition-opacity" title="Home">
@@ -259,7 +259,7 @@ export function ProjectSidebar({
       </button>
 
       {/* Workspace list */}
-      <div className={`flex-1 min-h-0 overflow-y-auto space-y-6 ${workflowsOpen ? "" : "hidden"}`}>
+      <div className={`space-y-6 ${workflowsOpen ? "" : "hidden"}`}>
         {workspaces.map((membership) => {
           const ws = membership.workspace;
           return (
@@ -520,7 +520,7 @@ export function ProjectSidebar({
       </div>
 
       {/* Bottom nav */}
-      <div className="shrink-0 pt-3 mt-3 border-t border-white/[0.06] space-y-1">
+      <div className="pt-3 mt-3 border-t border-white/[0.06] space-y-1">
             {/* Notes */}
             <button
               onClick={onNotes}

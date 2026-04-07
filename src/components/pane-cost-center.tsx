@@ -11,6 +11,7 @@ type CostEntry = {
   costCents: number;
   featureId: string | null;
   createdAt: string;
+  project?: { id: string; name: string };
 };
 
 type Summary = {
@@ -22,9 +23,14 @@ type Summary = {
   byDay: Record<string, number>;
 };
 
+type ProjectOption = {
+  id: string;
+  name: string;
+};
+
 type Props = {
-  projectId: string;
-  projectName: string;
+  projectId?: string;
+  projectName?: string;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -61,7 +67,9 @@ function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`;
 }
 
-export function PaneCostCenter({ projectId, projectName }: Props) {
+export function PaneCostCenter({ projectId: initialProjectId, projectName: initialProjectName }: Props) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(initialProjectId || "all");
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [entries, setEntries] = useState<CostEntry[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,24 +77,32 @@ export function PaneCostCenter({ projectId, projectName }: Props) {
   const loadCosts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/costs`, { cache: "no-store" });
+      const url = selectedProjectId === "all"
+        ? "/api/costs"
+        : `/api/costs?projectId=${selectedProjectId}`;
+      const res = await fetch(url, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries);
         setSummary(data.summary);
+        if (data.projects) setProjects(data.projects);
       }
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     loadCosts();
   }, [loadCosts]);
 
-  if (loading) {
+  const selectedName = selectedProjectId === "all"
+    ? "All Projects"
+    : projects.find((p) => p.id === selectedProjectId)?.name || initialProjectName || "";
+
+  if (loading && projects.length === 0) {
     return (
-      <div className="p-6">
+      <div>
         <h1 className="text-xl font-semibold text-[#f1f5f9] mb-6">Cost Center</h1>
         <p className="text-sm text-white/30">Loading...</p>
       </div>
@@ -95,13 +111,25 @@ export function PaneCostCenter({ projectId, projectName }: Props) {
 
   const actionEntries = summary ? Object.entries(summary.byAction).sort((a, b) => b[1].costCents - a[1].costCents) : [];
   const dayEntries = summary ? Object.entries(summary.byDay).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14) : [];
+  const showProjectColumn = selectedProjectId === "all";
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div>
+        <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold text-[#f1f5f9]">Cost Center</h1>
-          <p className="text-xs text-white/30 mt-1">{projectName}</p>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white/70 focus:outline-none focus:border-white/20 cursor-pointer"
+          >
+            <option value="all" className="bg-[#0c1120] text-white">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id} className="bg-[#0c1120] text-white">
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           onClick={loadCosts}
@@ -206,6 +234,9 @@ export function PaneCostCenter({ projectId, projectName }: Props) {
                   <span className={`text-[0.55rem] px-1.5 py-0.5 rounded-full font-medium ${ACTION_COLORS[entry.action] || "text-white/40 bg-white/[0.06]"}`}>
                     {ACTION_LABELS[entry.action] || entry.action}
                   </span>
+                  {showProjectColumn && entry.project && (
+                    <span className="text-[0.6rem] text-white/25">{entry.project.name}</span>
+                  )}
                   <span className="text-xs text-white/20">
                     {formatTokens(entry.inputTokens)} in / {formatTokens(entry.outputTokens)} out
                   </span>

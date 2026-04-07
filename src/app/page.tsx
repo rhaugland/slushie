@@ -306,8 +306,8 @@ export default function Home() {
             <main className="flex-1 p-6 overflow-y-auto">
               {selection.type === "cost-center" ? (
                 <PaneCostCenter
-                  projectId={project.id}
-                  projectName={project.name}
+                  projectId={project?.id}
+                  projectName={project?.name}
                 />
               ) : selection.type === "add-major-feature" ? (
                 <AddMajorFeature
@@ -431,10 +431,7 @@ export default function Home() {
         </main>
       ) : selection.type === "cost-center" ? (
         <main className="flex-1 p-6 overflow-y-auto">
-          <div className="p-6">
-            <h1 className="text-xl font-semibold text-[#f1f5f9] mb-4">Cost Center</h1>
-            <p className="text-sm text-white/30">Select a project to view its API costs.</p>
-          </div>
+          <PaneCostCenter />
         </main>
       ) : selection.type === "client-view" ? (
         <main className="flex-1 p-6 overflow-y-auto">
