@@ -11,6 +11,7 @@ export async function GET() {
       name: pa.project.name,
       clientName: cm.client.name,
       deployUrl: pa.project.deployUrl,
+      clientPreviewEnabled: pa.project.clientPreviewEnabled,
     }))
   );
 

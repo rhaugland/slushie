@@ -54,6 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function PortalProjectPage() {
   const [tab, setTab] = useState<Tab>("preview");
   const [deployUrl, setDeployUrl] = useState<string | null>(null);
+  const [clientPreviewEnabled, setClientPreviewEnabled] = useState(false);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
@@ -111,6 +112,7 @@ export default function PortalProjectPage() {
       if (res.ok) {
         const data = await res.json();
         setDeployUrl(data.deployUrl);
+        setClientPreviewEnabled(data.clientPreviewEnabled ?? false);
       }
     }
     loadPreview();
@@ -266,8 +268,8 @@ export default function PortalProjectPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "preview", label: "Preview" },
     { key: "notes", label: "Notes" },
-    { key: "wishlist", label: "Wishlist" },
     { key: "feedback", label: "Feedback" },
+    { key: "wishlist", label: "Wishlist" },
   ];
 
   return (
@@ -320,16 +322,16 @@ export default function PortalProjectPage() {
         {/* Preview tab */}
         {tab === "preview" && (
           <div className="h-full flex flex-col">
-            {deployUrl ? (
+            {clientPreviewEnabled && deployUrl ? (
               <>
                 <iframe
-                  src={`${deployUrl}?isolate=true`}
+                  src={`/api/preview/?projectId=${projectId}&isolate=true`}
                   className="flex-1 w-full border-0"
                   title="Project Preview"
                 />
                 <div className="px-6 py-2 border-t border-white/[0.06]">
                   <a
-                    href={`${deployUrl}?isolate=true`}
+                    href={`/api/preview/?projectId=${projectId}&isolate=true`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-blue-400 hover:text-blue-300"

@@ -1,7 +1,8 @@
 import { inngest } from "./client";
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activity";
-import { spawn, execSync } from "child_process";
+import { detectFramework } from "@/lib/framework-detect";
+import { spawn, exec, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -38,7 +39,7 @@ function commitCurrent(projectDir: string, message: string): void {
   } catch { /* no-op if nothing to commit */ }
 }
 
-function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; tokensUsed: number; durationMs: number }> {
+function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number; tokensUsed: number; inputTokens: number; outputTokens: number; durationMs: number }> {
   const startTime = Date.now();
   return new Promise((resolve) => {
     // Filter out env vars that make Claude Code think it's nested
@@ -66,23 +67,27 @@ function runClaudeCode(prompt: string, cwd: string): Promise<{ stdout: string; s
     child.on("close", (code) => {
       const durationMs = Date.now() - startTime;
       let tokensUsed = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
       try {
         const parsed = JSON.parse(stdout);
+        if (parsed?.usage?.input_tokens) inputTokens = parsed.usage.input_tokens;
+        if (parsed?.usage?.output_tokens) outputTokens = parsed.usage.output_tokens;
         if (parsed?.usage?.total_tokens) {
           tokensUsed = parsed.usage.total_tokens;
-        } else if (parsed?.usage?.input_tokens && parsed?.usage?.output_tokens) {
-          tokensUsed = parsed.usage.input_tokens + parsed.usage.output_tokens;
+        } else {
+          tokensUsed = inputTokens + outputTokens;
         }
         // Extract the actual result text if JSON format
         if (parsed?.result) {
           stdout = parsed.result;
         }
       } catch { /* not JSON, keep raw stdout */ }
-      resolve({ stdout, stderr, exitCode: code ?? 1, tokensUsed, durationMs });
+      resolve({ stdout, stderr, exitCode: code ?? 1, tokensUsed, inputTokens, outputTokens, durationMs });
     });
 
     child.on("error", (err) => {
-      resolve({ stdout, stderr: stderr + "\n" + err.message, exitCode: 1, tokensUsed: 0, durationMs: Date.now() - startTime });
+      resolve({ stdout, stderr: stderr + "\n" + err.message, exitCode: 1, tokensUsed: 0, inputTokens: 0, outputTokens: 0, durationMs: Date.now() - startTime });
     });
   });
 }
@@ -242,16 +247,45 @@ Look at the existing codebase structure first, then implement this feature.
       return runClaudeCode(prompt, buildDir);
     });
 
-    // Finalize: commit changes, clean up worktree
+    // Finalize: commit changes, start variant preview server
     if (branchName && worktreeDir) {
       await step.run("finalize-branch", async () => {
         commitCurrent(worktreeDir, `variant: ${variantId} build`);
-        // Clean up the worktree — changes are committed on the branch
-        try { run(`git worktree remove --force "${worktreeDir}"`, context.projectDir); } catch { /* ok */ }
-        try { fs.rmSync(worktreeDir, { recursive: true, force: true }); } catch { /* ok */ }
-        try { run("git worktree prune", context.projectDir); } catch { /* ok */ }
         // Safety: ensure main repo stays on main
         try { run("git checkout main", context.projectDir); } catch { /* ok */ }
+      });
+
+      // Start a dev server for the variant worktree on its own port
+      await step.run("start-variant-server", async () => {
+        // Pick a unique port for this variant
+        const variantPort = 5000 + (parseInt((variantId || "0").slice(-4), 36) % 1000);
+
+        // Kill any existing process on that port
+        try { execSync(`lsof -ti:${variantPort} | xargs kill -9 2>/dev/null || true`, { shell: "/bin/bash" }); } catch { /* ok */ }
+
+        // Install deps in the worktree
+        try {
+          execSync("npm install --legacy-peer-deps 2>&1", {
+            cwd: worktreeDir,
+            timeout: 180000,
+            encoding: "utf-8",
+          });
+        } catch { /* deps may already be installed via shared node_modules */ }
+
+        // Detect framework and start dev server
+        const fw = await detectFramework(worktreeDir);
+        const cmd = fw.startCommand(variantPort);
+
+        exec(
+          `nohup bash -c '${cmd}' > /tmp/slushie-variant-${variantPort}.log 2>&1 &`,
+          { cwd: worktreeDir }
+        );
+
+        // Store the port on the variant
+        await prisma.variant.update({
+          where: { id: variantId },
+          data: { port: variantPort },
+        });
       });
     } else {
       await step.run("commit-og", async () => {
@@ -308,6 +342,30 @@ Look at the existing codebase structure first, then implement this feature.
         description: actionDesc,
         metadata: { featureId: featureId, tokensUsed: result.tokensUsed, durationMs: result.durationMs, failReason },
       });
+
+      // Log cost entry for the cost center
+      if (result.inputTokens > 0 || result.outputTokens > 0) {
+        const model = "claude-sonnet-4-6";
+        const pricing: Record<string, { input: number; output: number }> = {
+          "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+        };
+        const p = pricing[model];
+        const costCents = Math.round(
+          ((result.inputTokens / 1_000_000) * p.input + (result.outputTokens / 1_000_000) * p.output) * 100 * 100
+        ) / 100;
+
+        await prisma.costEntry.create({
+          data: {
+            projectId,
+            action: "build",
+            model,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            costCents,
+            featureId,
+          },
+        });
+      }
     });
 
     return { featureId, variantId, mode, exitCode: result.exitCode };

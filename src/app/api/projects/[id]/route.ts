@@ -20,7 +20,7 @@ export async function GET(
           children: {
             include: {
               builds: { take: 1, orderBy: { createdAt: "desc" } },
-              variants: { orderBy: { createdAt: "desc" } },
+              variants: { orderBy: { createdAt: "desc" }, select: { id: true, label: true, isMain: true, status: true, port: true, buildLogs: true, buildOutput: true, createdAt: true, featureId: true } },
             },
             orderBy: { sortOrder: "asc" },
           },

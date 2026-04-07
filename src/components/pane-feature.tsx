@@ -7,6 +7,7 @@ type VariantData = {
   label: string;
   isMain: boolean;
   status: string;
+  port: number | null;
   buildLogs: string | null;
   createdAt: string;
 };
@@ -52,6 +53,7 @@ type Props = {
   };
   projectId: string;
   deployUrl: string | null;
+  deployStatus: string;
   parentTitle: string | null;
   parentRoute: string | null;
   onUpdate: () => void;
@@ -64,10 +66,11 @@ function deriveRoute(title: string): string {
   return "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-function previewUrl(projectId: string, route: string, isolate: boolean = false): string {
+function previewUrl(projectId: string, route: string, isolate: boolean = false, variantId?: string): string {
   // Proxy through our API to avoid mixed-content / localhost blocking
   const cleanRoute = route.startsWith("/") ? route.slice(1) : route;
-  const base = `/api/preview/${cleanRoute}?projectId=${projectId}`;
+  let base = `/api/preview/${cleanRoute}?projectId=${projectId}`;
+  if (variantId) base += `&variantId=${variantId}`;
   return isolate ? `${base}&isolate=true` : base;
 }
 
@@ -78,7 +81,7 @@ const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   error: { text: "Error", color: "text-red-400 bg-red-500/10" },
 };
 
-export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parentRoute, onUpdate, autoOpenAddFeature, onAutoOpenAddFeatureConsumed, onAddMajorFeature }: Props) {
+export function PaneFeature({ feature, projectId, deployUrl, deployStatus, parentTitle, parentRoute, onUpdate, autoOpenAddFeature, onAutoOpenAddFeatureConsumed, onAddMajorFeature }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(feature.title);
   const [description, setDescription] = useState(feature.description);
@@ -86,6 +89,8 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
   const [addingFeature, setAddingFeature] = useState(false);
   const [newFeatureTitle, setNewFeatureTitle] = useState("");
   const [newFeaturePrompt, setNewFeaturePrompt] = useState("");
+  const [pushingToClient, setPushingToClient] = useState(false);
+  const [pushedToClient, setPushedToClient] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
 
   // Auto-open add feature form when triggered from sidebar
@@ -194,25 +199,20 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
 
   async function handleRestoreOriginal() {
     await fetch(`/api/features/${feature.id}/restore-original`, { method: "POST" });
-    setExpandedVariant(null);
     onUpdate();
-    // Give the dev server time to recompile after git checkout
-    setTimeout(() => bustIframe(previewRef), 2000);
+    // Give the dev server time to recompile after restore
+    setTimeout(() => bustIframe(previewRef), 3000);
   }
 
   async function handlePromote(variantId: string) {
     await fetch(`/api/variants/${variantId}/promote`, { method: "POST" });
-    setExpandedVariant(null);
     onUpdate();
-    // Give the dev server time to recompile after git checkout
-    setTimeout(() => bustIframe(previewRef), 2000);
+    // Give the dev server time to recompile after merge
+    setTimeout(() => bustIframe(previewRef), 3000);
   }
 
   async function handleDeleteVariant(variantId: string) {
-    if (expandedVariant === variantId) {
-      await fetch(`/api/projects/${projectId}/restore-og`, { method: "POST" });
-      setExpandedVariant(null);
-    }
+    if (expandedVariant === variantId) setExpandedVariant(null);
     await fetch(`/api/variants/${variantId}`, { method: "DELETE" });
     onUpdate();
   }
@@ -228,20 +228,11 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
     onUpdate();
   }
 
-  async function handleToggleVariantPreview(variantId: string) {
+  function handleToggleVariantPreview(variantId: string) {
     if (expandedVariant === variantId) {
-      // Collapse — restore main branch for the live preview
-      await fetch(`/api/projects/${projectId}/restore-og`, { method: "POST" });
       setExpandedVariant(null);
-      setTimeout(() => bustIframe(previewRef), 2000);
     } else {
-      // Expand — checkout variant branch
-      await fetch(`/api/variants/${variantId}/preview`, { method: "POST" });
       setExpandedVariant(variantId);
-      setTimeout(() => {
-        bustIframe(previewRef);
-        bustIframe(variantPreviewRef);
-      }, 2000);
     }
   }
 
@@ -360,7 +351,7 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-[0.6rem] uppercase tracking-widest text-white/30">
-                  Live Version
+                  Live Version{anyPromoted ? ` (${variants.find(v => v.isMain)?.label || "Variant"})` : ""}
                 </span>
                 {feature.status === "building" && (
                   <span className="flex items-center gap-1.5 text-[0.55rem] text-yellow-400/60">
@@ -479,12 +470,12 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
                         <button
                           onClick={() => handleToggleVariantPreview(variant.id)}
                           className={`text-[0.6rem] px-2 py-1 rounded transition-colors ${
-                            isExpanded
+                            expandedVariant === variant.id
                               ? "bg-blue-500/20 text-blue-400"
                               : "text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10"
                           }`}
                         >
-                          {isExpanded ? "Hide" : "Preview"}
+                          {expandedVariant === variant.id ? "Hide" : "Preview"}
                         </button>
                         <button
                           onClick={() => {
@@ -514,18 +505,22 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
                   </div>
                 </div>
 
-                {/* Inline variant preview dropdown */}
-                {isExpanded && deployUrl && featurePreviewRoute && (
+                {/* Variant preview — uses its own dev server, does not touch main */}
+                {expandedVariant === variant.id && variant.port && deployUrl && featurePreviewRoute && (
                   <div className="border-t border-white/[0.06] p-2">
                     <div className="rounded-lg border border-blue-500/30 overflow-hidden bg-white">
                       <iframe
-                        ref={variantPreviewRef}
-                        src={previewUrl(projectId, featurePreviewRoute, true)}
+                        src={previewUrl(projectId, featurePreviewRoute, true, variant.id)}
                         className="w-full border-0"
                         style={{ height: "350px" }}
                         title={`Preview of ${variant.label}`}
                       />
                     </div>
+                  </div>
+                )}
+                {expandedVariant === variant.id && !variant.port && (
+                  <div className="border-t border-white/[0.06] px-3 py-2">
+                    <p className="text-xs text-white/30">No preview server available. Rebuild this variant to enable preview.</p>
                   </div>
                 )}
 
@@ -778,14 +773,40 @@ export function PaneFeature({ feature, projectId, deployUrl, parentTitle, parent
               <div className="text-[0.6rem] uppercase tracking-widest text-white/30">
                 Preview — {feature.title}
               </div>
-              <a
-                href={previewUrl(projectId, majorRoute)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[0.6rem] text-blue-400 hover:text-blue-300"
-              >
-                Open in new tab
-              </a>
+              <div className="flex items-center gap-3">
+                {deployStatus === "running" && (
+                  <button
+                    onClick={async () => {
+                      setPushingToClient(true);
+                      try {
+                        const res = await fetch(`/api/projects/${projectId}/push-client`, { method: "POST" });
+                        if (res.ok) {
+                          setPushedToClient(true);
+                          setTimeout(() => setPushedToClient(false), 3000);
+                        }
+                      } finally {
+                        setPushingToClient(false);
+                      }
+                    }}
+                    disabled={pushingToClient}
+                    className={`text-[0.6rem] px-2.5 py-1 rounded-md transition-colors ${
+                      pushedToClient
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-white/[0.08] text-white/50 hover:text-white/80 hover:bg-white/[0.12]"
+                    }`}
+                  >
+                    {pushingToClient ? "Pushing..." : pushedToClient ? "Pushed!" : "Push to Client"}
+                  </button>
+                )}
+                <a
+                  href={previewUrl(projectId, majorRoute)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[0.6rem] text-blue-400 hover:text-blue-300"
+                >
+                  Open in new tab
+                </a>
+              </div>
             </div>
             <div className="rounded-lg border border-white/[0.08] overflow-hidden bg-white">
               <iframe

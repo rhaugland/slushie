@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type WorkspaceMembership = {
   workspaceId: string;
@@ -27,6 +27,21 @@ export function PaneClientView({ workspaces }: Props) {
 
   const [filterProject, setFilterProject] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [clientCreds, setClientCreds] = useState<Record<string, { email: string; password: string }>>({});
+
+  // Auto-create client access users for each project on mount
+  useEffect(() => {
+    allProjects.forEach(async (project) => {
+      try {
+        const res = await fetch(`/api/projects/${project.id}/client-access`, { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          setClientCreds((prev) => ({ ...prev, [project.id]: { email: data.email, password: data.password } }));
+        }
+      } catch { /* ignore */ }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProjects.length]);
 
   const filtered = filterProject
     ? allProjects.filter((p) => p.id === filterProject)
@@ -133,6 +148,39 @@ export function PaneClientView({ workspaces }: Props) {
                     </button>
                   </div>
                 </div>
+
+                {/* Client Credentials */}
+                {clientCreds[project.id] && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-[0.6rem] uppercase tracking-widest text-white/30">Client Credentials</div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.6rem] text-white/30 w-14 shrink-0">Email</span>
+                        <code className="flex-1 text-xs text-white/50 bg-white/[0.04] border border-white/[0.06] rounded px-3 py-1.5 truncate">
+                          {clientCreds[project.id].email}
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard(clientCreds[project.id].email, project.id + "-cred-email")}
+                          className="px-2.5 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors shrink-0"
+                        >
+                          {copiedId === project.id + "-cred-email" ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.6rem] text-white/30 w-14 shrink-0">Password</span>
+                        <code className="flex-1 text-xs text-white/50 bg-white/[0.04] border border-white/[0.06] rounded px-3 py-1.5 truncate">
+                          {clientCreds[project.id].password}
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard(clientCreds[project.id].password, project.id + "-cred-pass")}
+                          className="px-2.5 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors shrink-0"
+                        >
+                          {copiedId === project.id + "-cred-pass" ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Deploy URL if available */}
                 {project.deployUrl && (

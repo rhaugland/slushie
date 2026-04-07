@@ -10,7 +10,6 @@ export async function GET(req: NextRequest) {
 
   // Get all project IDs the user can access
   const ownerWorkspaceIds = user.memberships
-    .filter((m) => m.role === "OWNER" || m.role === "ADMIN")
     .map((m) => m.workspaceId);
 
   const grantedProjectIds = user.clientMemberships.flatMap((cm) =>

@@ -99,6 +99,7 @@ model Project {
   deployUrl    String?
   deployStatus String    @default("stopped") // stopped | starting | running | error
   port         Int?
+  clientPreviewEnabled Boolean @default(false)
   apiKey       String?   @unique
   createdAt    DateTime  @default(now())
   workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -142,6 +143,7 @@ model Variant {
   label       String   @default("Variant")
   isMain      Boolean  @default(false)
   status      String   @default("draft") // draft | building | live | error
+  port        Int?
   buildLogs   String?  @db.Text
   buildOutput String?  @db.Text
   createdAt   DateTime @default(now())

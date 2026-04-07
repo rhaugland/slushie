@@ -31,7 +31,7 @@ export async function getCurrentClientUser() {
           client: { select: { id: true, name: true } },
           projectAccess: {
             include: {
-              project: { select: { id: true, name: true, deployUrl: true } },
+              project: { select: { id: true, name: true, deployUrl: true, clientPreviewEnabled: true } },
             },
           },
         },

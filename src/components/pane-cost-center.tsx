@@ -77,15 +77,26 @@ export function PaneCostCenter({ projectId: initialProjectId, projectName: initi
   const loadCosts = useCallback(async () => {
     setLoading(true);
     try {
-      const url = selectedProjectId === "all"
-        ? "/api/costs"
-        : `/api/costs?projectId=${selectedProjectId}`;
-      const res = await fetch(url, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setEntries(data.entries);
-        setSummary(data.summary);
-        if (data.projects) setProjects(data.projects);
+      // Always load the full list first to get the project dropdown options
+      const allRes = await fetch("/api/costs", { cache: "no-store" });
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        if (allData.projects) setProjects(allData.projects);
+
+        if (selectedProjectId === "all") {
+          setEntries(allData.entries);
+          setSummary(allData.summary);
+        }
+      }
+
+      // If a specific project is selected, load its costs
+      if (selectedProjectId !== "all") {
+        const res = await fetch(`/api/costs?projectId=${selectedProjectId}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setEntries(data.entries);
+          setSummary(data.summary);
+        }
       }
     } finally {
       setLoading(false);

@@ -60,20 +60,22 @@ function disabledPageHtml(): string {
 <body style="margin:0;background:#0a0f1a"></body></html>`;
 }
 
-function proxyPath(path: string, projectId: string): string {
+function proxyPath(path: string, projectId: string, variantId?: string): string {
   if (path.startsWith("/api/preview")) return path;
   const sep = path.includes("?") ? "&" : "?";
-  return `/api/preview${path}${sep}projectId=${projectId}`;
+  let url = `/api/preview${path}${sep}projectId=${projectId}`;
+  if (variantId) url += `&variantId=${variantId}`;
+  return url;
 }
 
-function rewriteCss(css: string, projectId: string): string {
+function rewriteCss(css: string, projectId: string, variantId?: string): string {
   return css.replace(
     /(url\(\s*['"]?)(\/(?!api\/preview)[^'")]*?)(['"]?\s*\))/g,
-    (_m, pre, path, post) => `${pre}${proxyPath(path, projectId)}${post}`
+    (_m, pre, path, post) => `${pre}${proxyPath(path, projectId, variantId)}${post}`
   );
 }
 
-function rewriteHtml(html: string, upstreamBase: string, projectId: string, isolate: boolean = false, disabledRoutes: string[] = []): string {
+function rewriteHtml(html: string, upstreamBase: string, projectId: string, isolate: boolean = false, disabledRoutes: string[] = [], variantId?: string): string {
   // Strip upstream base URL
   html = html.replace(new RegExp(upstreamBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
 
@@ -86,13 +88,13 @@ function rewriteHtml(html: string, upstreamBase: string, projectId: string, isol
           /(\/[^\s,]+)/g,
           (path: string) => {
             if (path.startsWith("/api/preview")) return path;
-            return proxyPath(path, projectId);
+            return proxyPath(path, projectId, variantId);
           }
         );
         return `${pre}${rewritten}${post}`;
       }
       if (value.startsWith("/") && !value.startsWith("/api/preview")) {
-        return `${pre}${proxyPath(value, projectId)}${post}`;
+        return `${pre}${proxyPath(value, projectId, variantId)}${post}`;
       }
       return _m;
     }
@@ -101,15 +103,16 @@ function rewriteHtml(html: string, upstreamBase: string, projectId: string, isol
   // Rewrite url() in inline styles
   html = html.replace(
     /(url\(\s*['"]?)(\/(?!api\/preview)[^'")]*?)(['"]?\s*\))/g,
-    (_m, pre, path, post) => proxyPath(path, projectId) ? `${pre}${proxyPath(path, projectId)}${post}` : _m
+    (_m, pre, path, post) => proxyPath(path, projectId, variantId) ? `${pre}${proxyPath(path, projectId, variantId)}${post}` : _m
   );
 
+  const variantParam = variantId ? `&variantId=${variantId}` : '';
   const baseTag = `<script>
     const _origFetch = window.fetch;
     window.fetch = function(url, opts) {
       if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('/api/preview')) {
         const sep = url.includes('?') ? '&' : '?';
-        url = '/api/preview' + url + sep + 'projectId=${projectId}';
+        url = '/api/preview' + url + sep + 'projectId=${projectId}${variantParam}';
       }
       return _origFetch.call(this, url, opts);
     };
@@ -163,6 +166,68 @@ function rewriteHtml(html: string, upstreamBase: string, projectId: string, isol
   }
 
   return html;
+}
+
+async function proxyToPort(
+  req: NextRequest,
+  targetPath: string,
+  port: number,
+  projectId: string,
+  isolate: boolean = false,
+  variantId?: string,
+) {
+  const upstreamBase = `http://localhost:${port}`;
+  const upstreamUrl = new URL(`${upstreamBase}${targetPath}`);
+  req.nextUrl.searchParams.forEach((val, key) => {
+    if (key !== "projectId" && key !== "isolate" && key !== "variantId") upstreamUrl.searchParams.set(key, val);
+  });
+
+  try {
+    const upstream = await fetch(upstreamUrl.toString(), {
+      headers: {
+        "Accept": req.headers.get("accept") || "*/*",
+        "Accept-Encoding": "identity",
+      },
+      redirect: "manual",
+    });
+
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get("location");
+      if (location) {
+        let proxied = location.replace(upstreamBase, "");
+        if (proxied.startsWith("/")) {
+          const sep = proxied.includes("?") ? "&" : "?";
+          const variantSuffix = variantId ? `&variantId=${variantId}` : '';
+          return new NextResponse(null, {
+            status: upstream.status,
+            headers: { Location: `/api/preview${proxied}${sep}projectId=${projectId}${variantSuffix}` },
+          });
+        }
+      }
+    }
+
+    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    const body = await upstream.arrayBuffer();
+
+    if (contentType.includes("text/html")) {
+      const html = rewriteHtml(new TextDecoder().decode(body), upstreamBase, projectId, isolate, [], variantId);
+      return new NextResponse(html, { status: upstream.status, headers: { "Content-Type": contentType } });
+    }
+    if (contentType.includes("text/css")) {
+      const css = rewriteCss(new TextDecoder().decode(body), projectId, variantId);
+      return new NextResponse(css, { status: upstream.status, headers: { "Content-Type": contentType } });
+    }
+
+    return new NextResponse(body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": upstream.headers.get("cache-control") || "no-cache",
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Variant preview server unreachable" }, { status: 502 });
+  }
 }
 
 async function proxyRequest(
@@ -263,6 +328,7 @@ export async function GET(
 ) {
   const { path } = await params;
   const projectId = req.nextUrl.searchParams.get("projectId");
+  const variantId = req.nextUrl.searchParams.get("variantId");
 
   if (!projectId) {
     return NextResponse.json({ error: "projectId required" }, { status: 400 });
@@ -270,6 +336,18 @@ export async function GET(
 
   const isolate = req.nextUrl.searchParams.get("isolate") === "true";
   const targetPath = "/" + path.join("/");
+
+  // If a variantId is provided, proxy to the variant's own dev server
+  if (variantId) {
+    const variant = await prisma.variant.findUnique({
+      where: { id: variantId },
+      select: { port: true, status: true },
+    });
+    if (!variant?.port) {
+      return NextResponse.json({ error: "Variant preview not available" }, { status: 503 });
+    }
+    return proxyToPort(req, targetPath, variant.port, projectId, isolate, variantId);
+  }
 
   const disabledRoutes = await getDisabledRoutes(projectId);
 

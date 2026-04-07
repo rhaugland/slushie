@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { execSync } from "child_process";
-import { findPreviewDir } from "@/lib/preview-dir";
 
 /**
- * POST: checkout this variant's branch so the preview server shows it.
+ * POST: Get the variant's preview URL (its own dev server on a separate port).
  * POST /api/variants/:id/preview
  */
 export async function POST(
@@ -15,21 +13,16 @@ export async function POST(
 
   const variant = await prisma.variant.findUnique({
     where: { id },
-    include: { feature: { include: { project: true } } },
+    select: { id: true, port: true, status: true },
   });
 
   if (!variant) {
     return NextResponse.json({ error: "Variant not found" }, { status: 404 });
   }
 
-  const projectDir = findPreviewDir(variant.feature.project);
-  const branchName = `variant-${id}`;
-
-  try {
-    execSync(`git checkout ${branchName}`, { cwd: projectDir, encoding: "utf-8", shell: "/bin/bash" });
-  } catch (e: any) {
-    return NextResponse.json({ error: "Branch not found", detail: e.message }, { status: 404 });
+  if (!variant.port) {
+    return NextResponse.json({ error: "Variant has no preview server" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, branch: branchName });
+  return NextResponse.json({ ok: true, port: variant.port });
 }

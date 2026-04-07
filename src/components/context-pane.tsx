@@ -86,6 +86,7 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
         feature={feature}
         projectId={project.id}
         deployUrl={project.deployUrl || null}
+        deployStatus={project.deployStatus || "stopped"}
         parentTitle={parentFeature?.title || null}
         parentRoute={parentFeature?.route || null}
         onUpdate={onUpdate}

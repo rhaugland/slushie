@@ -27,5 +27,15 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ deployUrl });
+  let clientPreviewEnabled = false;
+  for (const cm of user.clientMemberships) {
+    for (const pa of cm.projectAccess) {
+      if (pa.project.id === id) {
+        clientPreviewEnabled = pa.project.clientPreviewEnabled;
+        break;
+      }
+    }
+  }
+
+  return NextResponse.json({ deployUrl, clientPreviewEnabled });
 }
