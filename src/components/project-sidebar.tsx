@@ -207,6 +207,12 @@ export function ProjectSidebar({
   const [confirmDeleteClientId, setConfirmDeleteClientId] = useState<string | null>(null);
   const [workflowsOpen, setWorkflowsOpen] = useState(true);
 
+  // Unified "New" menu
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [newMenuAction, setNewMenuAction] = useState<"workspace" | "client" | "project" | null>(null);
+  const [newMenuWorkspaceId, setNewMenuWorkspaceId] = useState<string | null>(null);
+  const [newMenuClientId, setNewMenuClientId] = useState<string | null>(null);
+
   return (
     <aside className="w-64 border-r border-white/[0.06] bg-[#0a0f1a] p-4 h-screen flex flex-col overflow-hidden">
       {/* Header */}
@@ -344,8 +350,8 @@ export function ProjectSidebar({
                           />
                         ))}
 
-                        {/* New project form / button */}
-                        {newProjectClientId === client.id ? (
+                        {/* New project form (triggered from unified menu) */}
+                        {newProjectClientId === client.id && (
                           <CreateProjectForm
                             clientId={client.id}
                             onCreated={() => {
@@ -354,21 +360,14 @@ export function ProjectSidebar({
                             }}
                             onCancel={() => setNewProjectClientId(null)}
                           />
-                        ) : (
-                          <button
-                            onClick={() => setNewProjectClientId(client.id)}
-                            className="w-full text-left px-3 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
-                          >
-                            + New project
-                          </button>
                         )}
                       </div>
                     </div>
                   );
                 })}
 
-                {/* New client form / button */}
-                {newClientWorkspaceId === ws.id ? (
+                {/* New client form (triggered from unified menu) */}
+                {newClientWorkspaceId === ws.id && (
                   <CreateClientForm
                     workspaceId={ws.id}
                     onCreated={() => {
@@ -377,20 +376,13 @@ export function ProjectSidebar({
                     }}
                     onCancel={() => setNewClientWorkspaceId(null)}
                   />
-                ) : (
-                  <button
-                    onClick={() => setNewClientWorkspaceId(ws.id)}
-                    className="w-full text-left px-2 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
-                  >
-                    + New client
-                  </button>
                 )}
               </div>
             </div>
           );
         })}
 
-        {/* New workspace */}
+        {/* Unified + New button */}
         {showWsForm ? (
           <form
             onSubmit={async (e) => {
@@ -405,6 +397,8 @@ export function ProjectSidebar({
                 } else {
                   setWsName("");
                   setShowWsForm(false);
+                  setNewMenuOpen(false);
+                  setNewMenuAction(null);
                   onRefresh();
                 }
               } finally {
@@ -413,6 +407,7 @@ export function ProjectSidebar({
             }}
             className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] space-y-2"
           >
+            <p className="text-[0.55rem] uppercase tracking-widest text-white/30">New Workspace</p>
             <input
               value={wsName}
               onChange={(e) => setWsName(e.target.value)}
@@ -431,19 +426,95 @@ export function ProjectSidebar({
               </button>
               <button
                 type="button"
-                onClick={() => { setShowWsForm(false); setWsError(""); }}
+                onClick={() => { setShowWsForm(false); setWsError(""); setNewMenuAction(null); }}
                 className="text-xs py-1.5 px-3 rounded text-white/30 hover:text-white/50 transition-colors"
               >
                 Cancel
               </button>
             </div>
           </form>
+        ) : newMenuOpen ? (
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
+              <span className="text-[0.55rem] uppercase tracking-widest text-white/30">Create new</span>
+              <button
+                onClick={() => { setNewMenuOpen(false); setNewMenuAction(null); }}
+                className="text-white/20 hover:text-white/40 text-xs"
+              >
+                x
+              </button>
+            </div>
+
+            {!newMenuAction ? (
+              <div className="py-1">
+                <button
+                  onClick={() => { setShowWsForm(true); setNewMenuAction("workspace"); }}
+                  className="w-full text-left px-3 py-2 text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-colors"
+                >
+                  Workspace
+                </button>
+                {workspaces.length > 0 && (
+                  <button
+                    onClick={() => setNewMenuAction("client")}
+                    className="w-full text-left px-3 py-2 text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-colors"
+                  >
+                    Client
+                  </button>
+                )}
+                {workspaces.some((m) => m.workspace.clients.length > 0) && (
+                  <button
+                    onClick={() => setNewMenuAction("project")}
+                    className="w-full text-left px-3 py-2 text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-colors"
+                  >
+                    Project
+                  </button>
+                )}
+              </div>
+            ) : newMenuAction === "client" ? (
+              <div className="py-1">
+                <p className="px-3 py-1 text-[0.55rem] text-white/25">Select workspace:</p>
+                {workspaces.map((m) => (
+                  <button
+                    key={m.workspace.id}
+                    onClick={() => {
+                      setNewClientWorkspaceId(m.workspace.id);
+                      setNewMenuOpen(false);
+                      setNewMenuAction(null);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-colors"
+                  >
+                    {m.workspace.name}
+                  </button>
+                ))}
+              </div>
+            ) : newMenuAction === "project" ? (
+              <div className="py-1">
+                <p className="px-3 py-1 text-[0.55rem] text-white/25">Select client:</p>
+                {workspaces.flatMap((m) =>
+                  m.workspace.clients.map((client) => (
+                    <button
+                      key={client.id}
+                      onClick={() => {
+                        setNewProjectClientId(client.id);
+                        setNewMenuOpen(false);
+                        setNewMenuAction(null);
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-colors"
+                    >
+                      <span>{client.name}</span>
+                      <span className="text-white/20 ml-1.5 text-[0.6rem]">{m.workspace.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+          </div>
         ) : (
           <button
-            onClick={() => setShowWsForm(true)}
+            onClick={() => setNewMenuOpen(true)}
             className="w-full text-left px-1 py-1.5 text-[0.65rem] text-white/25 hover:text-white/50 transition-colors"
           >
-            + New workspace
+            + New
           </button>
         )}
       </div>
