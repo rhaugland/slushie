@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { TreeNode } from "./tree-node";
-import { EditableText } from "./editable-text";
 
 type Feature = {
   id: string;
@@ -169,16 +168,7 @@ export function ProjectTree({ project, selection, onSelect, onToggle, onAddFeatu
         }`}
       >
         <div className="flex items-center justify-between">
-          {onRenameProject ? (
-            <EditableText
-              value={project.name}
-              onSave={onRenameProject}
-              className="text-sm font-semibold text-white/90"
-              inputClassName="text-sm font-semibold text-white/90"
-            />
-          ) : (
-            <span className="text-sm font-semibold text-white/90">{project.name}</span>
-          )}
+          <span className="text-sm font-semibold text-white/90">{project.name}</span>
           {project.deployUrl && (
             <a
               href={project.deployUrl}

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { EditableText } from "./editable-text";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 type ClientMember = {
   id: string;
@@ -35,6 +34,14 @@ export function PaneProject({ project, onUpdate, onOpenPreview, isAdmin }: Props
   const [addRole, setAddRole] = useState<string>("member");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [renameName, setRenameName] = useState(project.name);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [codebaseAnalysis, setCodebaseAnalysis] = useState<any>(null);
+  const [codebaseFileUrl, setCodebaseFileUrl] = useState("");
+  const codebaseInputRef = useRef<HTMLInputElement>(null);
 
   const loadMembers = useCallback(async () => {
     if (!project.clientId) return;
@@ -143,15 +150,102 @@ export function PaneProject({ project, onUpdate, onOpenPreview, isAdmin }: Props
     }
   }
 
+  async function handleCodebaseDrop(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const { url } = await uploadRes.json();
+      setCodebaseFileUrl(url);
+
+      setUploading(false);
+      setAnalyzing(true);
+
+      const res = await fetch(`/api/projects/${project.id}/analyze-codebase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileUrl: url }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Analysis failed");
+        return;
+      }
+
+      const analysis = await res.json();
+      setCodebaseAnalysis(analysis);
+    } finally {
+      setUploading(false);
+      setAnalyzing(false);
+    }
+  }
+
+  if (codebaseAnalysis) {
+    const CodebaseMapper = require("./codebase-mapper").CodebaseMapper;
+    return (
+      <CodebaseMapper
+        sections={codebaseAnalysis.sections}
+        projectId={project.id}
+        fileUrl={codebaseFileUrl}
+        onComplete={() => {
+          setCodebaseAnalysis(null);
+          setCodebaseFileUrl("");
+          onUpdate();
+        }}
+        onCancel={() => {
+          setCodebaseAnalysis(null);
+          setCodebaseFileUrl("");
+        }}
+      />
+    );
+  }
+
   return (
     <div>
-      <EditableText
-        value={project.name}
-        onSave={handleRename}
-        className="text-xl font-semibold text-[#f1f5f9]"
-        inputClassName="text-xl font-semibold text-[#f1f5f9]"
-      />
-      <p className="text-xs text-white/40 mb-6 mt-1">
+      {/* Project header with pencil rename */}
+      <div className="flex items-center gap-2 mb-1">
+        {renaming ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (renameName.trim() && renameName !== project.name) {
+                await handleRename(renameName.trim());
+              }
+              setRenaming(false);
+            }}
+            className="flex items-center gap-2 flex-1"
+          >
+            <input
+              autoFocus
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              onBlur={() => setRenaming(false)}
+              onKeyDown={(e) => { if (e.key === "Escape") setRenaming(false); }}
+              className="flex-1 bg-transparent border border-white/10 rounded px-2 py-1 text-xl font-semibold text-[#f1f5f9] focus:outline-none focus:border-white/20"
+            />
+          </form>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold text-[#f1f5f9]">{project.name}</h1>
+            <button
+              onClick={() => { setRenameName(project.name); setRenaming(true); }}
+              className="text-white/20 hover:text-white/50 transition-colors p-1"
+              title="Rename project"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                <path d="m15 5 4 4" />
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-white/40 mb-6">
         {project.client?.name || ""}
       </p>
 
@@ -169,6 +263,61 @@ export function PaneProject({ project, onUpdate, onOpenPreview, isAdmin }: Props
           <span>Preview</span>
         </button>
       )}
+
+      {/* Codebase upload */}
+      <div className="mb-6">
+        <h3 className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-3">Codebase</h3>
+        {uploading ? (
+          <div className="flex flex-col items-center justify-center py-8 rounded-lg border border-dashed border-white/10 bg-white/[0.02]">
+            <div className="w-6 h-6 border-2 border-white/10 border-t-blue-500 rounded-full animate-spin mb-3" />
+            <p className="text-xs text-white/40">Uploading...</p>
+          </div>
+        ) : analyzing ? (
+          <div className="flex flex-col items-center justify-center py-8 rounded-lg border border-dashed border-blue-500/30 bg-blue-500/[0.03]">
+            <div className="w-6 h-6 border-2 border-white/10 border-t-blue-500 rounded-full animate-spin mb-3" />
+            <p className="text-xs text-white/40">Analyzing codebase...</p>
+            <p className="text-[0.6rem] text-white/20 mt-1">Reading files and identifying features</p>
+          </div>
+        ) : (
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(false);
+              if (e.dataTransfer.files.length > 0) handleCodebaseDrop(e.dataTransfer.files);
+            }}
+            onClick={() => codebaseInputRef.current?.click()}
+            className={`rounded-lg p-6 border border-dashed cursor-pointer transition-all text-center ${
+              dragging
+                ? "border-blue-500/50 bg-blue-500/10"
+                : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+            }`}
+          >
+            <input
+              ref={codebaseInputRef}
+              type="file"
+              accept=".zip,.tar,.tar.gz,.tgz"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) handleCodebaseDrop(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <svg className="w-8 h-8 text-white/15 mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+            <p className="text-xs text-white/40 mb-1">
+              {project.deployUrl ? "Drop a new codebase to re-analyze" : "Drop a zip to analyze & deploy"}
+            </p>
+            <p className="text-[0.6rem] text-white/20">
+              .zip archive of your project
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Team Members */}
       <div className="mb-6">
