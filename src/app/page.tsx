@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ProjectSidebar } from "@/components/project-sidebar";
+import { TopBar } from "@/components/top-bar";
+import { Dashboard } from "@/components/dashboard";
 import { ProjectTree } from "@/components/project-tree";
 import { ContextPane } from "@/components/context-pane";
 import { AddContext } from "@/components/add-context";
@@ -12,29 +13,35 @@ import { PaneWishlist } from "@/components/pane-wishlist";
 import { PaneFeedback } from "@/components/pane-feedback";
 import { PaneClientView } from "@/components/pane-client-portal";
 import { PaneCostCenter } from "@/components/pane-cost-center";
+import { PanePropose } from "@/components/pane-propose";
 import { AddMajorFeature } from "@/components/add-major-feature";
 
-type Selection =
+type View =
+  | "dashboard"
+  | "build"
+  | "notes"
+  | "feedback"
+  | "wishlist"
+  | "propose"
+  | "cost-center"
+  | "client-view"
+  | "team"
+  | "workspace-settings"
+  | "client-settings";
+
+type BuildSelection =
   | { type: "project" }
   | { type: "feature"; id: string }
   | { type: "meeting"; id: string }
-  | { type: "workspace-settings"; workspaceId: string }
-  | { type: "client-settings"; clientId: string }
-  | { type: "team" }
-  | { type: "notes" }
-  | { type: "wishlist" }
-  | { type: "feedback" }
-  | { type: "client-view" }
-  | { type: "cost-center" }
   | { type: "add-major-feature" };
 
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<Selection>({ type: "project" });
+  const [view, setView] = useState<View>("dashboard");
   const [project, setProject] = useState<any>(null);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [buildSelection, setBuildSelection] = useState<BuildSelection>({ type: "project" });
   const [middleCollapsed, setMiddleCollapsed] = useState(false);
   const [previewMode, setPreviewMode] = useState<"collapsed" | "half" | "full">("collapsed");
   const [autoOpenAddFeature, setAutoOpenAddFeature] = useState(false);
@@ -67,9 +74,9 @@ export default function Home() {
     }
   }, [selectedProjectId, loadProject]);
 
+  // Polling for active builds
   useEffect(() => {
     if (!project) return;
-
     const allFeatures = [
       ...project.features,
       ...project.features.flatMap((f: any) => f.children || []),
@@ -80,9 +87,7 @@ export default function Home() {
         ["transcribing", "extracting"].includes(m.status)
       ) ||
       project.deployStatus === "starting";
-
     if (!hasActiveWork) return;
-
     const interval = setInterval(() => loadProject(project.id), 2000);
     return () => clearInterval(interval);
   }, [project, loadProject]);
@@ -98,13 +103,11 @@ export default function Home() {
 
   async function handleAddFeature(parentId: string | null) {
     if (parentId) {
-      // Select the parent feature and signal to open the add form
-      setSelection({ type: "feature", id: parentId });
+      setBuildSelection({ type: "feature", id: parentId });
       setAutoOpenAddFeature(true);
       return;
     }
-    // Major feature — open the AI-powered creation flow
-    setSelection({ type: "add-major-feature" });
+    setBuildSelection({ type: "add-major-feature" });
   }
 
   async function handleLogout() {
@@ -114,7 +117,6 @@ export default function Home() {
 
   const workspaces = user?.memberships || [];
 
-  // Check if user is admin in any workspace that contains the current project's workspace
   function isAdminForWorkspace(workspaceId?: string): boolean {
     const isAdmin = (m: any) => m.role === "admin" || m.role === "owner";
     if (!workspaceId) return workspaces.some(isAdmin);
@@ -127,138 +129,98 @@ export default function Home() {
     )
   );
 
+  // Derive workspace/client info from selectedProjectId for settings panel
+  let currentWorkspaceId: string | null = null;
+  let currentClientId: string | null = null;
+  let currentWorkspaceName = "";
+  let currentClientName = "";
+  let currentProjectName = "";
+  for (const m of workspaces) {
+    for (const c of m.workspace.clients) {
+      for (const p of c.projects) {
+        if (p.id === selectedProjectId) {
+          currentWorkspaceId = m.workspaceId;
+          currentClientId = c.id;
+          currentWorkspaceName = m.workspace.name;
+          currentClientName = c.name;
+          currentProjectName = p.name;
+        }
+      }
+    }
+  }
+
+  function handleSelectProject(projectId: string) {
+    setSelectedProjectId(projectId);
+    setView("dashboard");
+    setBuildSelection({ type: "project" });
+  }
+
+  const viewTitles: Record<string, string> = {
+    notes: "Notes",
+    feedback: "Feedback",
+    wishlist: "Wishlist",
+    propose: "Propose",
+    "cost-center": "Cost Center",
+    "client-view": "Client View",
+    team: "Team",
+    "workspace-settings": "Workspace Settings",
+    "client-settings": "Client Settings",
+  };
+
+  if (!user) return null;
+
+  const hasProjects = allProjects.length > 0;
+
   return (
-    <div className="flex min-h-screen">
-      {/* Left sidebar — project list (hidden in full preview) */}
-      {previewMode !== "full" && (
-        leftCollapsed ? (
-          <button
-            onClick={() => setLeftCollapsed(false)}
-            className="w-10 border-r border-white/[0.06] bg-[#0a0f1a] flex flex-col items-center cursor-pointer hover:bg-white/[0.03] transition-colors group"
-            title="Expand navigation"
-          >
-            <svg className="mt-3 mb-3 text-white/20 group-hover:text-white/40 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-white/20 group-hover:text-white/40 transition-colors"
-              style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-            >
-              Navigation
-            </span>
-          </button>
-        ) : (
-          <ProjectSidebar
-            workspaces={workspaces}
-            selectedId={selectedProjectId}
-            onSelect={(id) => {
+    <div className="flex flex-col min-h-screen">
+      <TopBar
+        workspaces={workspaces}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={handleSelectProject}
+        onHome={() => setView("dashboard")}
+        onLogout={handleLogout}
+        onWorkspaceSettings={() => setView("workspace-settings")}
+        onClientSettings={() => setView("client-settings")}
+        onProjectSettings={() => {
+          setView("build");
+          setBuildSelection({ type: "project" });
+        }}
+        workspaceName={currentWorkspaceName}
+        clientName={currentClientName}
+        projectName={currentProjectName}
+        workspaceId={currentWorkspaceId}
+        clientId={currentClientId}
+      />
+
+      {!hasProjects || !selectedProjectId ? (
+        <main className="flex-1 p-6 overflow-y-auto">
+          <AddContext
+            projects={allProjects}
+            onUpdate={() => {
+              loadUser();
+              if (selectedProjectId) loadProject(selectedProjectId);
+            }}
+            onProjectSelected={(id) => {
               setSelectedProjectId(id);
-              setSelection({ type: "project" });
-            }}
-            onDeleteProject={async (id) => {
-              await fetch(`/api/projects/${id}`, { method: "DELETE" });
-              if (selectedProjectId === id) {
-                setSelectedProjectId(null);
-                setProject(null);
-                setSelection({ type: "project" });
-              }
-              loadUser();
-            }}
-            onDeleteClient={async (id) => {
-              await fetch(`/api/clients/${id}`, { method: "DELETE" });
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "project" });
-              loadUser();
-            }}
-            onProjectSettings={(projectId) => {
-              setSelectedProjectId(projectId);
-              setSelection({ type: "project" });
-            }}
-            onClientSettings={(clientId) => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "client-settings", clientId });
-            }}
-            onRenameClient={async (clientId, name) => {
-              await fetch(`/api/clients/${clientId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
-              });
-              loadUser();
-            }}
-            onRenameProject={async (projectId, name) => {
-              await fetch(`/api/projects/${projectId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
-              });
-              loadUser();
-              if (selectedProjectId === projectId) loadProject(projectId);
-            }}
-            onCreateWorkspace={async (name) => {
-              const res = await fetch("/api/workspaces", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
-              });
-              if (!res.ok) {
-                const data = await res.json();
-                return data.error || "Failed to create workspace";
-              }
-              await loadUser();
-              return null;
-            }}
-            onRefresh={() => loadUser()}
-            onCollapse={() => setLeftCollapsed(true)}
-            onWorkspaceSettings={(workspaceId) => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "workspace-settings", workspaceId });
-            }}
-            onLogout={handleLogout}
-            onTeam={() => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "team" });
-            }}
-            teamActive={selection.type === "team"}
-            onNotes={() => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "notes" });
-            }}
-            notesActive={selection.type === "notes"}
-            onWishlist={() => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "wishlist" });
-            }}
-            wishlistActive={selection.type === "wishlist"}
-            onFeedback={() => setSelection({ type: "feedback" })}
-            feedbackActive={selection.type === "feedback"}
-            onClientView={() => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "client-view" });
-            }}
-            clientViewActive={selection.type === "client-view"}
-            onCostCenter={() => {
-              setSelection({ type: "cost-center" });
-            }}
-            costCenterActive={selection.type === "cost-center"}
-            onHome={() => {
-              setSelectedProjectId(null);
-              setProject(null);
-              setSelection({ type: "project" });
+              setView("dashboard");
             }}
           />
-        )
-      )}
-
-      {project ? (
-        <>
-          {/* Middle panel — feature tree (hidden in full/half preview) */}
+        </main>
+      ) : view === "dashboard" ? (
+        <Dashboard
+          projectId={selectedProjectId}
+          projectName={currentProjectName}
+          onNavigate={(v) => {
+            setView(v);
+            if (v === "build") {
+              setBuildSelection({ type: "project" });
+              setPreviewMode("collapsed");
+              setMiddleCollapsed(false);
+            }
+          }}
+        />
+      ) : view === "build" && project ? (
+        <div className="flex flex-1 min-h-0">
           {previewMode === "collapsed" && (
             middleCollapsed ? (
               <button
@@ -278,8 +240,8 @@ export default function Home() {
             ) : (
               <ProjectTree
                 project={project}
-                selection={selection as any}
-                onSelect={(sel) => setSelection(sel as Selection)}
+                selection={buildSelection as any}
+                onSelect={(sel) => setBuildSelection(sel as BuildSelection)}
                 onToggle={handleToggle}
                 onAddFeature={handleAddFeature}
                 onCollapse={() => setMiddleCollapsed(true)}
@@ -301,28 +263,22 @@ export default function Home() {
             )
           )}
 
-          {/* Context pane (hidden in full preview, shares space in half) */}
           {previewMode !== "full" && (
             <main className="flex-1 p-6 overflow-y-auto">
-              {selection.type === "cost-center" ? (
-                <PaneCostCenter
-                  projectId={project?.id}
-                  projectName={project?.name}
-                />
-              ) : selection.type === "add-major-feature" ? (
+              {buildSelection.type === "add-major-feature" ? (
                 <AddMajorFeature
                   projectId={project.id}
                   projectName={project.name}
                   onCreated={() => {
                     if (selectedProjectId) loadProject(selectedProjectId);
-                    setSelection({ type: "project" });
+                    setBuildSelection({ type: "project" });
                   }}
-                  onCancel={() => setSelection({ type: "project" })}
+                  onCancel={() => setBuildSelection({ type: "project" })}
                 />
               ) : (
                 <ContextPane
                   project={project}
-                  selection={selection}
+                  selection={buildSelection}
                   onUpdate={() => {
                     if (selectedProjectId) loadProject(selectedProjectId);
                     loadUser();
@@ -333,13 +289,12 @@ export default function Home() {
                   isAdmin={isAdminForWorkspace(project?.workspaceId)}
                   autoOpenAddFeature={autoOpenAddFeature}
                   onAutoOpenAddFeatureConsumed={() => setAutoOpenAddFeature(false)}
-                  onAddMajorFeature={() => setSelection({ type: "add-major-feature" })}
+                  onAddMajorFeature={() => setBuildSelection({ type: "add-major-feature" })}
                 />
               )}
             </main>
           )}
 
-          {/* Right panel — full site preview */}
           {previewMode === "collapsed" ? (
             <button
               onClick={() => setPreviewMode("half")}
@@ -358,9 +313,7 @@ export default function Home() {
           ) : (
             <div className="flex-1 border-l border-white/[0.06] bg-[#0a0f1a] flex flex-col min-w-0">
               <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] shrink-0">
-                <span className="text-[0.6rem] uppercase tracking-widest text-white/30">
-                  Live Preview
-                </span>
+                <span className="text-[0.6rem] uppercase tracking-widest text-white/30">Live Preview</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setPreviewMode("half")}
@@ -410,46 +363,25 @@ export default function Home() {
               )}
             </div>
           )}
-        </>
-      ) : selection.type === "notes" ? (
+        </div>
+      ) : view === "workspace-settings" || view === "client-settings" ? (
         <main className="flex-1 p-6 overflow-y-auto">
-          <PaneNotes workspaces={workspaces} />
-        </main>
-      ) : selection.type === "wishlist" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <PaneWishlist
-            workspaces={workspaces}
-            onUpdate={() => loadUser()}
-          />
-        </main>
-      ) : selection.type === "feedback" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <PaneFeedback
-            workspaces={workspaces}
-            onUpdate={() => loadUser()}
-          />
-        </main>
-      ) : selection.type === "cost-center" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <PaneCostCenter />
-        </main>
-      ) : selection.type === "client-view" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <PaneClientView workspaces={workspaces} />
-        </main>
-      ) : selection.type === "team" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <PaneTeam
-            workspaces={workspaces}
-            onUpdate={() => loadUser()}
-            isAdmin={isAdminForWorkspace()}
-          />
-        </main>
-      ) : selection.type === "workspace-settings" || selection.type === "client-settings" ? (
-        <main className="flex-1 p-6 overflow-y-auto">
+          <button
+            onClick={() => setView("dashboard")}
+            className="flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </button>
           <ContextPane
             project={null}
-            selection={selection}
+            selection={
+              view === "workspace-settings"
+                ? { type: "workspace-settings", workspaceId: currentWorkspaceId! }
+                : { type: "client-settings", clientId: currentClientId! }
+            }
             onUpdate={() => loadUser()}
             workspaces={workspaces}
             currentUserId={user?.id}
@@ -457,17 +389,38 @@ export default function Home() {
         </main>
       ) : (
         <main className="flex-1 p-6 overflow-y-auto">
-          <AddContext
-            projects={allProjects}
-            onUpdate={() => {
-              loadUser();
-              if (selectedProjectId) loadProject(selectedProjectId);
-            }}
-            onProjectSelected={(id) => {
-              setSelectedProjectId(id);
-              setSelection({ type: "project" });
-            }}
-          />
+          <button
+            onClick={() => setView("dashboard")}
+            className="flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </button>
+          <h2 className="text-lg font-medium text-white/80 mb-4">{viewTitles[view] ?? view}</h2>
+
+          {view === "notes" && (
+            <PaneNotes workspaces={workspaces} projectId={selectedProjectId} />
+          )}
+          {view === "feedback" && (
+            <PaneFeedback workspaces={workspaces} onUpdate={() => loadUser()} projectId={selectedProjectId} />
+          )}
+          {view === "wishlist" && (
+            <PaneWishlist workspaces={workspaces} onUpdate={() => loadUser()} projectId={selectedProjectId} />
+          )}
+          {view === "propose" && (
+            <PanePropose workspaces={workspaces} projectId={selectedProjectId} />
+          )}
+          {view === "cost-center" && (
+            <PaneCostCenter projectId={selectedProjectId ?? undefined} projectName={currentProjectName} />
+          )}
+          {view === "client-view" && (
+            <PaneClientView workspaces={workspaces} projectId={selectedProjectId} />
+          )}
+          {view === "team" && (
+            <PaneTeam workspaces={workspaces} onUpdate={() => loadUser()} isAdmin={isAdminForWorkspace()} projectId={selectedProjectId} />
+          )}
         </main>
       )}
     </div>
