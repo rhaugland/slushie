@@ -10,9 +10,10 @@ type WorkspaceMembership = {
 
 type Props = {
   workspaces: WorkspaceMembership[];
+  projectId?: string | null;
 };
 
-export function PaneClientView({ workspaces }: Props) {
+export function PaneClientView({ workspaces, projectId }: Props) {
   const allProjects = workspaces.flatMap((m) =>
     m.workspace.clients.flatMap((c: any) =>
       (c.projects || []).map((p: any) => ({
@@ -26,6 +27,11 @@ export function PaneClientView({ workspaces }: Props) {
   );
 
   const [filterProject, setFilterProject] = useState("");
+
+  useEffect(() => {
+    if (projectId) setFilterProject(projectId);
+  }, [projectId]);
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [clientCreds, setClientCreds] = useState<Record<string, { email: string; password: string }>>({});
 

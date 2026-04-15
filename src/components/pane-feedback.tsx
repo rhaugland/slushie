@@ -27,6 +27,7 @@ type WorkspaceMembership = {
 type Props = {
   workspaces: WorkspaceMembership[];
   onUpdate: () => void;
+  projectId?: string | null;
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -35,7 +36,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: "text-white/40 bg-white/[0.06]",
 };
 
-export function PaneFeedback({ workspaces, onUpdate }: Props) {
+export function PaneFeedback({ workspaces, onUpdate, projectId }: Props) {
   const allProjects = workspaces.flatMap((m) =>
     m.workspace.clients.flatMap((c: any) =>
       (c.projects || []).map((p: any) => ({
@@ -49,6 +50,11 @@ export function PaneFeedback({ workspaces, onUpdate }: Props) {
   );
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(allProjects[0]?.id || "");
+
+  useEffect(() => {
+    if (projectId) setSelectedProjectId(projectId);
+  }, [projectId]);
+
   const [items, setItems] = useState<FeedbackItemData[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -369,16 +375,28 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
                         </div>
                         {item.description && (
                           <div>
-                            <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">AI Analysis</div>
-                            <div className="text-xs text-white/60">{item.description}</div>
+                            <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Suggested Feature</div>
+                            <div className="text-xs text-white/60">
+                              <span className="font-medium text-white/70">{item.title}</span>
+                              {" — "}{item.description}
+                            </div>
+                            {item.featureType && (
+                              <span className={`inline-block mt-1.5 text-[0.55rem] px-1.5 py-0.5 rounded ${
+                                item.featureType === "major"
+                                  ? "text-emerald-400 bg-emerald-500/10"
+                                  : "text-sky-400 bg-sky-500/10"
+                              }`}>
+                                {item.featureType === "major" ? "Major Feature" : "Minor Feature"}
+                              </span>
+                            )}
                           </div>
                         )}
                         <div className="flex gap-2">
                           <button
                             onClick={() => setMovingItem(item)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                            className="px-3 py-1.5 text-xs rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                           >
-                            Move to Production
+                            Send to Wishlist
                           </button>
                           <button
                             onClick={() => handleDismiss(item.id)}

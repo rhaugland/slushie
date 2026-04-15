@@ -27,9 +27,10 @@ type Props = {
   }[];
   onUpdate: () => void;
   isAdmin?: boolean;
+  projectId?: string | null;
 };
 
-export function PaneTeam({ workspaces, onUpdate, isAdmin }: Props) {
+export function PaneTeam({ workspaces, onUpdate, isAdmin, projectId }: Props) {
   const [membersByClient, setMembersByClient] = useState<Record<string, ClientMember[]>>({});
   const [loading, setLoading] = useState(true);
   const [addEmail, setAddEmail] = useState("");

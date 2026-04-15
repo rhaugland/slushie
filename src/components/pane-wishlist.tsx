@@ -30,6 +30,7 @@ type WorkspaceMembership = {
 type Props = {
   workspaces: WorkspaceMembership[];
   onUpdate: () => void;
+  projectId?: string | null;
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -40,7 +41,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const PRIORITIES = ["high", "medium", "low"];
 
-export function PaneWishlist({ workspaces, onUpdate }: Props) {
+export function PaneWishlist({ workspaces, onUpdate, projectId }: Props) {
   const allClients = workspaces.flatMap((m) =>
     m.workspace.clients.map((c: any) => ({
       id: c.id,
@@ -59,6 +60,11 @@ export function PaneWishlist({ workspaces, onUpdate }: Props) {
   const [loading, setLoading] = useState(false);
   const [filterClientId, setFilterClientId] = useState("");
   const [filterProjectId, setFilterProjectId] = useState("");
+
+  useEffect(() => {
+    if (projectId) setFilterProjectId(projectId);
+  }, [projectId]);
+
   const [filterPriority, setFilterPriority] = useState("");
   const [filterStatus, setFilterStatus] = useState("pending");
   const [movingItem, setMovingItem] = useState<WishlistItemData | null>(null);

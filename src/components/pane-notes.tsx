@@ -39,6 +39,7 @@ type WorkspaceMembership = {
 
 type Props = {
   workspaces: WorkspaceMembership[];
+  projectId?: string | null;
 };
 
 const TYPE_ICONS: Record<string, string> = {
@@ -48,7 +49,7 @@ const TYPE_ICONS: Record<string, string> = {
   handwritten: "Image",
 };
 
-export function PaneNotes({ workspaces }: Props) {
+export function PaneNotes({ workspaces, projectId }: Props) {
   const allProjects = workspaces.flatMap((m) =>
     m.workspace.clients.flatMap((c: any) =>
       (c.projects || []).map((p: any) => ({
@@ -61,6 +62,11 @@ export function PaneNotes({ workspaces }: Props) {
   );
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(allProjects[0]?.id || "");
+
+  useEffect(() => {
+    if (projectId) setSelectedProjectId(projectId);
+  }, [projectId]);
+
   const [sourceFilter, setSourceFilter] = useState<"all" | "internal" | "client">("all");
   const [notes, setNotes] = useState<MeetingNote[]>([]);
   const [loading, setLoading] = useState(false);
