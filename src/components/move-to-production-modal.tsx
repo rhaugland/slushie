@@ -101,7 +101,7 @@ export function MoveToProductionModal({ item, projects, allWishlistItems = [], o
         className="bg-[#0c1120] border border-white/[0.08] rounded-xl p-6 w-full max-w-md space-y-4 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-semibold text-white/80">Move to Production</h3>
+        <h3 className="text-sm font-semibold text-white/80">Send to Wishlist</h3>
 
         <div>
           <label className="block text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Title</label>
@@ -218,9 +218,9 @@ export function MoveToProductionModal({ item, projects, allWishlistItems = [], o
           <button
             onClick={handleMove}
             disabled={moving || !title.trim() || !projectId}
-            className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 py-2.5 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {moving ? "Building..." : "Move & Build"}
+            {moving ? "Sending..." : "Send to Wishlist"}
           </button>
           <button
             onClick={onClose}

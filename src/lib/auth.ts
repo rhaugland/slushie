@@ -40,7 +40,7 @@ export async function setSessionCookie(userId: string, email: string): Promise<v
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: true,
-    sameSite: "lax",
+    sameSite: "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
@@ -50,8 +50,8 @@ export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: true,
+    sameSite: "none",
     path: "/",
     maxAge: 0,
   });
