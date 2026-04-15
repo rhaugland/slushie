@@ -26,14 +26,13 @@ type Props = {
   onUpdate: () => void;
   workspaces?: WorkspaceMembership[];
   currentUserId?: string;
-  onOpenPreview?: () => void;
   isAdmin?: boolean;
   autoOpenAddFeature?: boolean;
   onAutoOpenAddFeatureConsumed?: () => void;
   onAddMajorFeature?: () => void;
 };
 
-export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId, onOpenPreview, isAdmin, autoOpenAddFeature, onAutoOpenAddFeatureConsumed, onAddMajorFeature }: Props) {
+export function ContextPane({ project, selection, onUpdate, workspaces, currentUserId, isAdmin, autoOpenAddFeature, onAutoOpenAddFeatureConsumed, onAddMajorFeature }: Props) {
   if (selection.type === "workspace-settings") {
     const membership = workspaces?.find((m) => m.workspaceId === selection.workspaceId);
     if (!membership || !currentUserId) return null;
@@ -65,7 +64,7 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
   }
 
   if (selection.type === "project") {
-    return <PaneProject project={project} onUpdate={onUpdate} onOpenPreview={onOpenPreview} isAdmin={isAdmin} />;
+    return <PaneProject project={project} onUpdate={onUpdate} isAdmin={isAdmin} />;
   }
 
   if (selection.type === "feature") {
@@ -85,6 +84,7 @@ export function ContextPane({ project, selection, onUpdate, workspaces, currentU
         key={feature.id}
         feature={feature}
         projectId={project.id}
+        githubRepo={project.githubRepo || null}
         deployUrl={project.deployUrl || null}
         deployStatus={project.deployStatus || "stopped"}
         parentTitle={parentFeature?.title || null}

@@ -71,6 +71,7 @@ export async function getCurrentUser() {
       id: true,
       email: true,
       name: true,
+      githubToken: true,
       memberships: {
         include: {
           workspace: {

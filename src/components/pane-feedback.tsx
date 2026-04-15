@@ -30,13 +30,15 @@ type Props = {
   projectId?: string | null;
 };
 
+type Tab = "view" | "suggestions";
+
 const PRIORITY_COLORS: Record<string, string> = {
   high: "text-red-400 bg-red-500/10",
   medium: "text-yellow-400 bg-yellow-500/10",
   low: "text-white/40 bg-white/[0.06]",
 };
 
-export function PaneFeedback({ workspaces, onUpdate, projectId }: Props) {
+export function PaneFeedback({ workspaces, onUpdate, projectId: projectIdProp }: Props) {
   const allProjects = workspaces.flatMap((m) =>
     m.workspace.clients.flatMap((c: any) =>
       (c.projects || []).map((p: any) => ({
@@ -50,56 +52,36 @@ export function PaneFeedback({ workspaces, onUpdate, projectId }: Props) {
   );
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(allProjects[0]?.id || "");
-
   useEffect(() => {
-    if (projectId) setSelectedProjectId(projectId);
-  }, [projectId]);
+    if (projectIdProp) setSelectedProjectId(projectIdProp);
+  }, [projectIdProp]);
 
+  const selectedProject = allProjects.find((p) => p.id === selectedProjectId);
+
+  const [tab, setTab] = useState<Tab>("view");
   const [items, setItems] = useState<FeedbackItemData[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [embedCodes, setEmbedCodes] = useState<Record<string, string>>({});
-  const [projectFeedbackCounts, setProjectFeedbackCounts] = useState<Record<string, number>>({});
-  const [showEmbedCards, setShowEmbedCards] = useState(true);
-  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
   const [movingItem, setMovingItem] = useState<FeedbackItemData | null>(null);
-  const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "internal" | "client">("all");
 
-  async function generateSamples() {
-    if (!selectedProjectId || generating) return;
-    setGenerating(true);
-    try {
-      const res = await fetch("/api/demo/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProjectId, type: "feedback" }),
-      });
-      if (res.ok) await loadItems();
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  const selectedProject = allProjects.find((p) => p.id === selectedProjectId);
+  // Embed widget state
+  const [embedCode, setEmbedCode] = useState<string | null>(null);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [showEmbed, setShowEmbed] = useState(false);
+  const [previewEmbed, setPreviewEmbed] = useState(false);
 
   const loadItems = useCallback(async () => {
     if (!selectedProjectId) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/feedback?projectId=${selectedProjectId}`, { cache: "no-store" });
-      if (res.ok) {
-        setItems(await res.json());
-      }
+      if (res.ok) setItems(await res.json());
     } finally {
       setLoading(false);
     }
   }, [selectedProjectId]);
 
-  useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+  useEffect(() => { loadItems(); }, [loadItems]);
 
   // Poll while any items are pending
   useEffect(() => {
@@ -109,27 +91,20 @@ export function PaneFeedback({ workspaces, onUpdate, projectId }: Props) {
     return () => clearInterval(interval);
   }, [items, loadItems]);
 
-  // Load embed codes and feedback counts for all projects on mount
+  // Load embed code for selected project
   useEffect(() => {
-    allProjects.forEach(async (p) => {
-      const res = await fetch(`/api/projects/${p.id}/embed-key`);
-      if (res.ok) {
-        const data = await res.json();
-        setEmbedCodes((prev) => ({ ...prev, [p.id]: data.embedCode }));
-      }
-      const fbRes = await fetch(`/api/feedback?projectId=${p.id}`, { cache: "no-store" });
-      if (fbRes.ok) {
-        const data = await fbRes.json();
-        setProjectFeedbackCounts((prev) => ({ ...prev, [p.id]: data.length }));
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!selectedProjectId) return;
+    setEmbedCode(null);
+    fetch(`/api/projects/${selectedProjectId}/embed-key`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data) setEmbedCode(data.embedCode); });
+  }, [selectedProjectId]);
 
-  function copyEmbed(projectId: string, code: string) {
-    navigator.clipboard.writeText(code);
-    setCopiedProjectId(projectId);
-    setTimeout(() => setCopiedProjectId(null), 2000);
+  function copyEmbed() {
+    if (!embedCode) return;
+    navigator.clipboard.writeText(embedCode);
+    setCopiedEmbed(true);
+    setTimeout(() => setCopiedEmbed(false), 2000);
   }
 
   async function handleDismiss(id: string) {
@@ -150,80 +125,85 @@ export function PaneFeedback({ workspaces, onUpdate, projectId }: Props) {
     loadItems();
   }
 
-  const filtered = items.filter((i) => sourceFilter === "all" || (i.source || "internal") === sourceFilter);
-  const reviewed = filtered.filter((i) => i.status === "reviewed");
-  const pending = filtered.filter((i) => i.status === "pending");
-  const dismissed = filtered.filter((i) => i.status === "dismissed");
+  // Split items
+  const allFeedback = items.filter((i) => i.status !== "dismissed");
+  const pendingProcessing = items.filter((i) => i.status === "pending");
+  const reviewedWithFeatures = items.filter((i) => i.status === "reviewed" && i.title && i.description);
+  const dismissed = items.filter((i) => i.status === "dismissed");
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-[#f1f5f9]">Feedback</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={generateSamples}
-            disabled={generating}
-            className="px-3 py-1.5 text-xs rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 disabled:opacity-50 transition-colors"
-          >
-            {generating ? "Generating..." : "AI Samples"}
-          </button>
-          <button
-            onClick={() => setShowEmbedCards(!showEmbedCards)}
-            className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.08] text-white/60 hover:text-white/80 hover:bg-white/[0.12] transition-colors"
-          >
-            {showEmbedCards ? "Hide Widgets" : "Embed Widgets"}
-          </button>
-        </div>
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 mb-6">
+        <button
+          onClick={() => setTab("view")}
+          className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+            tab === "view"
+              ? "bg-white/[0.08] text-white/80"
+              : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+          }`}
+        >
+          View Feedback
+        </button>
+        <button
+          onClick={() => setTab("suggestions")}
+          className={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
+            tab === "suggestions"
+              ? "bg-white/[0.08] text-white/80"
+              : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+          }`}
+        >
+          Review Feature Suggestions
+          {reviewedWithFeatures.length > 0 && (
+            <span className="text-[0.6rem] bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded-full">
+              {reviewedWithFeatures.length}
+            </span>
+          )}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowEmbed(!showEmbed)}
+          className="px-4 py-2 text-sm rounded-lg bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+        >
+          {showEmbed ? "Hide Widget" : "Embed Widget"}
+        </button>
       </div>
 
-      {/* Embed code cards — one per project */}
-      {showEmbedCards && (
-        <div className="mb-6 space-y-2">
-          {allProjects.map((p) => {
-            const code = embedCodes[p.id];
-            const count = projectFeedbackCounts[p.id] ?? 0;
-            const isActive = count > 0;
-            return (
-              <div key={p.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-white/70">{p.clientName} / {p.name}</span>
-                    {isActive ? (
-                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-400 font-medium">Active</span>
-                    ) : (
-                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-white/[0.04] text-white/25 font-medium">Not installed</span>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => setPreviewProjectId(previewProjectId === p.id ? null : p.id)}
-                      className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
-                    >
-                      Preview
-                    </button>
-                    {code && (
-                      <button
-                        onClick={() => copyEmbed(p.id, code)}
-                        className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
-                      >
-                        {copiedProjectId === p.id ? "Copied!" : "Copy"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {code ? (
-                  <code className="block text-[0.65rem] text-blue-400/70 bg-white/[0.03] px-3 py-2 rounded-md break-all leading-relaxed">
-                    {code}
-                  </code>
-                ) : (
-                  <div className="text-[0.6rem] text-white/20">Loading...</div>
-                )}
-                {previewProjectId === p.id && (
-                  <div className="mt-3">
-                    <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1.5">Widget Preview</div>
-                    <div className="rounded-lg border border-white/[0.08] overflow-hidden" style={{ height: 220 }}>
-                      <iframe
-                        srcDoc={`<!DOCTYPE html>
+      {/* Embed widget section */}
+      {showEmbed && (
+        <div className="mb-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-white/60">Feedback Widget for {selectedProject?.clientName} / {selectedProject?.name}</span>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => setPreviewEmbed(!previewEmbed)}
+                className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
+              >
+                {previewEmbed ? "Hide Preview" : "Preview"}
+              </button>
+              {embedCode && (
+                <button
+                  onClick={copyEmbed}
+                  className="px-2.5 py-1 text-[0.65rem] rounded-md bg-white/[0.08] text-white/60 hover:text-white/80 transition-colors"
+                >
+                  {copiedEmbed ? "Copied!" : "Copy Code"}
+                </button>
+              )}
+            </div>
+          </div>
+          {embedCode ? (
+            <code className="block text-[0.65rem] text-blue-400/70 bg-white/[0.03] px-3 py-2 rounded-md break-all leading-relaxed">
+              {embedCode}
+            </code>
+          ) : (
+            <div className="text-[0.6rem] text-white/20">Loading...</div>
+          )}
+          {previewEmbed && (
+            <div className="mt-3">
+              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1.5">Widget Preview</div>
+              <div className="rounded-lg border border-white/[0.08] overflow-hidden" style={{ height: 220 }}>
+                <iframe
+                  srcDoc={`<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -257,197 +237,209 @@ submit.onclick=function(){form.innerHTML='<div style="text-align:center;color:rg
 </script>
 </body>
 </html>`}
-                        className="w-full h-full border-0"
-                        sandbox="allow-scripts"
-                        title={`Feedback widget preview for ${p.name}`}
-                      />
-                    </div>
-                    <p className="text-[0.55rem] text-white/20 mt-1">This is how the feedback bar appears to your users. Click &quot;Let us know&quot; to see the form.</p>
-                  </div>
-                )}
+                  className="w-full h-full border-0"
+                  sandbox="allow-scripts"
+                  title="Feedback widget preview"
+                />
               </div>
-            );
-          })}
+              <p className="text-[0.55rem] text-white/20 mt-1">This is how the feedback bar appears to your users.</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Project selector + source filter */}
-      <div className="mb-4 flex gap-2">
-        <select
-          value={selectedProjectId}
-          onChange={(e) => { setSelectedProjectId(e.target.value); setExpandedId(null); }}
-          className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-white/20"
-        >
-          {allProjects.map((p) => (
-            <option key={p.id} value={p.id} className="bg-[#0c1120]">
-              {p.clientName} / {p.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value as "all" | "internal" | "client")}
-          className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-white/20"
-        >
-          <option value="all" className="bg-[#0c1120]">All Sources</option>
-          <option value="internal" className="bg-[#0c1120]">Internal</option>
-          <option value="client" className="bg-[#0c1120]">Client</option>
-        </select>
-      </div>
-
-      {/* Content */}
-      {loading && items.length === 0 ? (
-        <p className="text-sm text-white/30">Loading...</p>
-      ) : allProjects.length === 0 ? (
-        <p className="text-sm text-white/30">No projects yet. Create a project first.</p>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-white/30">No feedback yet. Embed the widget to start collecting.</p>
-      ) : (
-        <div className="space-y-4">
-          {/* Pending (processing) */}
-          {pending.length > 0 && (
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">Processing</div>
-              <div className="space-y-2">
-                {pending.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs text-white/40 truncate flex-1">{item.text}</div>
-                      {(item.source || "internal") === "client" && (
-                        <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[0.6rem] text-yellow-400/60 mt-1">
-                      <span className="w-2 h-2 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
-                      Analyzing...
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* View Feedback tab */}
+      {tab === "view" && (
+        <>
+          {loading && items.length === 0 ? (
+            <p className="text-sm text-white/30">Loading...</p>
+          ) : allFeedback.length === 0 && pendingProcessing.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-white/30 mb-2">No feedback yet.</p>
+              <p className="text-xs text-white/20">Embed the widget on your client&apos;s site to start collecting feedback.</p>
             </div>
-          )}
+          ) : (
+            <div className="space-y-2">
+              {/* Processing items */}
+              {pendingProcessing.map((item) => (
+                <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                  <div className="text-xs text-white/50">{item.text}</div>
+                  <div className="flex items-center gap-1.5 text-[0.6rem] text-yellow-400/60 mt-1.5">
+                    <span className="w-2 h-2 border border-yellow-400/40 border-t-yellow-400 rounded-full animate-spin" />
+                    Analyzing...
+                  </div>
+                </div>
+              ))}
 
-          {/* Reviewed (ready for action) */}
-          {reviewed.length > 0 && (
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-2">
-                Ready for Review ({reviewed.length})
-              </div>
-              <div className="space-y-2">
-                {reviewed.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
-                    <button
-                      onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                      className="w-full text-left px-4 py-3 flex items-center gap-3"
+              {/* All feedback as clean read-only cards */}
+              {allFeedback.filter((i) => i.status !== "pending").map((item) => (
+                <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
+                  <button
+                    onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                    className="w-full text-left px-4 py-3 flex items-center gap-3"
+                  >
+                    {/* Source badge */}
+                    <span className={`text-[0.6rem] px-2 py-1 rounded-md shrink-0 ${
+                      (item.source || "internal") === "client"
+                        ? "bg-orange-400/10 text-orange-400"
+                        : "bg-white/[0.06] text-white/40"
+                    }`}>
+                      {(item.source || "internal") === "client" ? "Client" : "Internal"}
+                    </span>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-white/60 truncate">{item.text}</div>
+                      <div className="text-[0.6rem] text-white/25 mt-0.5">
+                        {new Date(item.createdAt).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", year: "numeric",
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Has suggestion indicator */}
+                    {item.title && item.description && (
+                      <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 shrink-0">
+                        Feature extracted
+                      </span>
+                    )}
+
+                    <svg
+                      className={`text-white/20 transition-transform shrink-0 ${expandedId === item.id ? "rotate-180" : ""}`}
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-white/70 font-medium">{item.title}</div>
-                        <div className="text-[0.6rem] text-white/30 mt-0.5">
-                          {new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                          {item.featureType && (
-                            <span className="ml-2 text-white/20">{item.featureType}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {(item.source || "internal") === "client" && (
-                          <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
-                        )}
-                        {item.priority && (
-                          <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${PRIORITY_COLORS[item.priority] || ""}`}>
-                            {item.priority}
-                          </span>
-                        )}
-                        <svg
-                          className={`text-white/20 transition-transform ${expandedId === item.id ? "rotate-180" : ""}`}
-                          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        >
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </div>
-                    </button>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
 
-                    {expandedId === item.id && (
-                      <div className="border-t border-white/[0.06] px-4 py-3 space-y-3">
+                  {expandedId === item.id && (
+                    <div className="border-t border-white/[0.06] px-4 py-3 space-y-3">
+                      <div>
+                        <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Full Feedback</div>
+                        <div className="text-xs text-white/50 whitespace-pre-wrap">{item.text}</div>
+                      </div>
+                      {item.title && item.description && (
                         <div>
-                          <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Original Feedback</div>
-                          <div className="text-xs text-white/50 whitespace-pre-wrap">{item.text}</div>
-                        </div>
-                        {item.description && (
-                          <div>
-                            <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">Suggested Feature</div>
-                            <div className="text-xs text-white/60">
-                              <span className="font-medium text-white/70">{item.title}</span>
-                              {" — "}{item.description}
-                            </div>
+                          <div className="text-[0.6rem] uppercase tracking-widest text-white/30 mb-1">AI Analysis</div>
+                          <div className="text-xs text-white/60">
+                            <span className="font-medium text-white/70">{item.title}</span>
+                            {" — "}{item.description}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {item.priority && (
+                              <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${PRIORITY_COLORS[item.priority] || ""}`}>
+                                {item.priority}
+                              </span>
+                            )}
                             {item.featureType && (
-                              <span className={`inline-block mt-1.5 text-[0.55rem] px-1.5 py-0.5 rounded ${
-                                item.featureType === "major"
-                                  ? "text-emerald-400 bg-emerald-500/10"
-                                  : "text-sky-400 bg-sky-500/10"
+                              <span className={`text-[0.55rem] px-1.5 py-0.5 rounded ${
+                                item.featureType === "major" ? "text-emerald-400 bg-emerald-500/10" : "text-sky-400 bg-sky-500/10"
                               }`}>
-                                {item.featureType === "major" ? "Major Feature" : "Minor Feature"}
+                                {item.featureType === "major" ? "Major" : "Minor"}
                               </span>
                             )}
                           </div>
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setMovingItem(item)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                          >
-                            Send to Wishlist
-                          </button>
-                          <button
-                            onClick={() => handleDismiss(item.id)}
-                            className="px-3 py-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
-                          >
-                            Dismiss
-                          </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Dismissed */}
-          {dismissed.length > 0 && (
-            <div>
-              <button
-                onClick={() => setExpandedId(expandedId === "dismissed" ? null : "dismissed")}
-                className="text-[0.6rem] uppercase tracking-widest text-white/20 hover:text-white/30 transition-colors"
-              >
-                Dismissed ({dismissed.length}) {expandedId === "dismissed" ? "▲" : "▼"}
-              </button>
-              {expandedId === "dismissed" && (
-                <div className="space-y-2 mt-2">
-                  {dismissed.map((item) => (
-                    <div key={item.id} className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-4 py-3 flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-white/30">{item.title}</span>
-                          {(item.source || "internal") === "client" && (
-                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full font-medium text-orange-400 bg-orange-400/10 shrink-0">Client</span>
-                          )}
-                        </div>
-                        <div className="text-[0.6rem] text-white/15">{item.text.slice(0, 80)}{item.text.length > 80 ? "..." : ""}</div>
-                      </div>
-                      <button
-                        onClick={() => handleRestore(item.id)}
-                        className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors shrink-0"
-                      >
-                        Restore
-                      </button>
+                      )}
                     </div>
-                  ))}
+                  )}
+                </div>
+              ))}
+
+              {/* Dismissed section */}
+              {dismissed.length > 0 && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => setExpandedId(expandedId === "dismissed" ? null : "dismissed")}
+                    className="text-[0.6rem] uppercase tracking-widest text-white/20 hover:text-white/30 transition-colors"
+                  >
+                    Dismissed ({dismissed.length}) {expandedId === "dismissed" ? "\u25B2" : "\u25BC"}
+                  </button>
+                  {expandedId === "dismissed" && (
+                    <div className="space-y-2 mt-2">
+                      {dismissed.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-4 py-3 flex items-center justify-between">
+                          <div className="min-w-0">
+                            <span className="text-xs text-white/30">{item.title || item.text.slice(0, 60)}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRestore(item.id)}
+                            className="text-[0.6rem] text-white/20 hover:text-white/40 transition-colors shrink-0 ml-3"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
-        </div>
+        </>
+      )}
+
+      {/* Review Feature Suggestions tab */}
+      {tab === "suggestions" && (
+        <>
+          {reviewedWithFeatures.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-white/30 mb-1">All caught up</p>
+              <p className="text-xs text-white/20">No pending feature suggestions to review.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {reviewedWithFeatures.map((item) => (
+                <div key={item.id} className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-white/80 font-medium">{item.title}</span>
+                        {item.priority && (
+                          <span className={`text-[0.6rem] px-1.5 py-0.5 rounded ${PRIORITY_COLORS[item.priority] || ""}`}>
+                            {item.priority}
+                          </span>
+                        )}
+                        {item.featureType && (
+                          <span className={`text-[0.6rem] px-1.5 py-0.5 rounded ${
+                            item.featureType === "major" ? "text-emerald-400 bg-emerald-500/10" : "text-sky-400 bg-sky-500/10"
+                          }`}>
+                            {item.featureType === "major" ? "Major" : "Minor"}
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-white/40 mt-1">{item.description}</p>
+                      )}
+                      <button
+                        onClick={() => {
+                          setTab("view");
+                          setExpandedId(item.id);
+                        }}
+                        className="text-[0.6rem] text-blue-400/60 hover:text-blue-400 mt-1.5 transition-colors"
+                      >
+                        Source: &ldquo;{item.text.slice(0, 60)}{item.text.length > 60 ? "..." : ""}&rdquo;
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setMovingItem(item)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                      >
+                        + Wishlist
+                      </button>
+                      <button
+                        onClick={() => handleDismiss(item.id)}
+                        className="px-3 py-1.5 text-xs rounded-lg text-white/20 hover:text-white/40 hover:bg-white/[0.04] transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Move to Production Modal */}

@@ -202,16 +202,18 @@ export function PaneNotes({ workspaces, projectId: projectIdProp }: Props) {
 
   async function handleMeet() {
     if (!selectedProjectId) return;
+    const proj = allProjects.find((p) => p.id === selectedProjectId);
+    if (!proj?.clientId) return;
     setCreating(true);
     try {
       const res = await fetch("/api/meetings/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProjectId }),
+        body: JSON.stringify({ clientId: proj.clientId, projectId: selectedProjectId }),
       });
       const data = await res.json();
       closeModal();
-      router.push(`/meet/${data.roomCode}`);
+      router.push(`/meet/${data.roomCode}?host=1&mid=${data.meetingId}`);
     } finally {
       setCreating(false);
     }
@@ -269,7 +271,7 @@ export function PaneNotes({ workspaces, projectId: projectIdProp }: Props) {
               : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
           }`}
         >
-          Review Suggestions
+          Review Feature Suggestions
           {pendingSuggestions.length > 0 && (
             <span className="text-[0.6rem] bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded-full">
               {pendingSuggestions.length}
@@ -415,7 +417,7 @@ export function PaneNotes({ workspaces, projectId: projectIdProp }: Props) {
         </>
       )}
 
-      {/* Review Suggestions tab */}
+      {/* Review Feature Suggestions tab */}
       {tab === "suggestions" && (
         <>
           {pendingSuggestions.length === 0 ? (

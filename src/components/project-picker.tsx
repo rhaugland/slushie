@@ -36,13 +36,17 @@ export function ProjectPicker({ workspaces, selectedProjectId, onSelect, onCreat
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Build flat project list grouped by client
+  const clients = workspaces.flatMap((m) =>
+    m.workspace.clients.filter((c) => c.projects.length > 0)
+  );
+
+  // Find selected label
   let selectedLabel = "Select a project";
-  for (const m of workspaces) {
-    for (const c of m.workspace.clients) {
-      for (const p of c.projects) {
-        if (p.id === selectedProjectId) {
-          selectedLabel = `${m.workspace.name} > ${c.name} > ${p.name}`;
-        }
+  for (const c of clients) {
+    for (const p of c.projects) {
+      if (p.id === selectedProjectId) {
+        selectedLabel = `${c.name} / ${p.name}`;
       }
     }
   }
@@ -60,31 +64,24 @@ export function ProjectPicker({ workspaces, selectedProjectId, onSelect, onCreat
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1 left-0 w-80 bg-[#111827] border border-white/[0.1] rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-          {workspaces.map((m) => (
-            <div key={m.workspaceId}>
+        <div className="absolute top-full mt-1 left-0 w-72 bg-[#111827] border border-white/[0.1] rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+          {clients.map((c) => (
+            <div key={c.id}>
               <div className="px-3 py-1.5 text-[0.6rem] uppercase tracking-widest text-white/30 font-medium">
-                {m.workspace.name}
+                {c.name}
               </div>
-              {m.workspace.clients.map((c) => (
-                <div key={c.id}>
-                  <div className="px-3 py-1 text-xs text-white/40 pl-5">
-                    {c.name}
-                  </div>
-                  {c.projects.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => { onSelect(p.id); setOpen(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-sm pl-8 transition-colors ${
-                        p.id === selectedProjectId
-                          ? "bg-white/[0.08] text-white"
-                          : "text-white/60 hover:bg-white/[0.04] hover:text-white/80"
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
+              {c.projects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { onSelect(p.id); setOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm pl-6 transition-colors ${
+                    p.id === selectedProjectId
+                      ? "bg-white/[0.08] text-white"
+                      : "text-white/60 hover:bg-white/[0.04] hover:text-white/80"
+                  }`}
+                >
+                  {p.name}
+                </button>
               ))}
             </div>
           ))}

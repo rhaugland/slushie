@@ -11,6 +11,7 @@ model User {
   email             String            @unique
   name              String
   passwordHash      String
+  githubToken       String?
   createdAt         DateTime          @default(now())
   memberships       WorkspaceMember[]
   clientMemberships ClientMember[]
@@ -46,6 +47,7 @@ model ClientMember {
   clientId      String
   userId        String?
   invitedEmail  String?
+  inviteToken   String?               @unique
   role          String                @default("member")
   createdAt     DateTime              @default(now())
   client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -101,6 +103,8 @@ model Project {
   port         Int?
   clientPreviewEnabled Boolean @default(false)
   apiKey       String?   @unique
+  githubRepo   String?   // "org/repo" format
+  githubBranch String?   @default("dev") // default target branch for PRs
   createdAt    DateTime  @default(now())
   workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   client       Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -110,6 +114,7 @@ model Project {
   wishlistItems WishlistItem[]
   feedbackItems FeedbackItem[]
   costEntries  CostEntry[]
+  billing      Billing?
 
   @@index([workspaceId])
   @@index([clientId])
@@ -126,6 +131,9 @@ model Feature {
   status      String         @default("draft") // draft | building | live | error
   route       String?
   moduleHash  String?
+  githubBranch String?
+  githubPrUrl  String?
+  githubPrNumber Int?
   createdAt   DateTime       @default(now())
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent      Feature?       @relation("FeatureTree", fields: [parentId], references: [id], onDelete: Cascade)
@@ -311,4 +319,25 @@ model LiveRoom {
   status    String   @default("waiting") // waiting | active | ended
   createdAt DateTime @default(now())
   meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Billing {
+  id                   String   @id @default(cuid())
+  projectId            String   @unique
+  clientEmail          String
+  monthlyAmount        Int      // cents
+  totalMonths          Int
+  status               String   @default("pending") // pending | active | paused | complete | cancelled
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  startedAt            DateTime?
+  pausedAt             DateTime?
+  monthsPaid           Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([stripeCustomerId])
 }

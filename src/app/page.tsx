@@ -6,7 +6,7 @@ import { TopBar } from "@/components/top-bar";
 import { Dashboard } from "@/components/dashboard";
 import { ProjectTree } from "@/components/project-tree";
 import { ContextPane } from "@/components/context-pane";
-import { AddContext } from "@/components/add-context";
+import { CreateProject } from "@/components/create-project";
 import { PaneTeam } from "@/components/pane-team";
 import { PaneNotes } from "@/components/pane-notes";
 import { PaneWishlist } from "@/components/pane-wishlist";
@@ -14,6 +14,11 @@ import { PaneFeedback } from "@/components/pane-feedback";
 import { PaneClientView } from "@/components/pane-client-portal";
 import { PaneCostCenter } from "@/components/pane-cost-center";
 import { PanePropose } from "@/components/pane-propose";
+import { PaneBilling } from "@/components/pane-billing";
+import { PaneAdmin } from "@/components/pane-admin";
+import { PaneStatus } from "@/components/pane-status";
+import { PaneReports } from "@/components/pane-reports";
+import { InitialBuild } from "@/components/initial-build";
 import { AddMajorFeature } from "@/components/add-major-feature";
 
 type View =
@@ -26,6 +31,11 @@ type View =
   | "cost-center"
   | "client-view"
   | "team"
+  | "billing"
+  | "admin"
+  | "status"
+  | "reports"
+  | "mobile"
   | "workspace-settings"
   | "client-settings";
 
@@ -42,9 +52,10 @@ export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [project, setProject] = useState<any>(null);
   const [buildSelection, setBuildSelection] = useState<BuildSelection>({ type: "project" });
-  const [middleCollapsed, setMiddleCollapsed] = useState(false);
-  const [previewMode, setPreviewMode] = useState<"collapsed" | "half" | "full">("collapsed");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [billingPrefill, setBillingPrefill] = useState<{ monthlyAmount: number; totalMonths: number } | null>(null);
   const [autoOpenAddFeature, setAutoOpenAddFeature] = useState(false);
+  const [needsInitialBuild, setNeedsInitialBuild] = useState(false);
 
   const loadUser = useCallback(async () => {
     const res = await fetch("/api/auth/me", { cache: "no-store" });
@@ -151,6 +162,7 @@ export default function Home() {
 
   function handleSelectProject(projectId: string) {
     setSelectedProjectId(projectId);
+    setNeedsInitialBuild(false);
     setView("dashboard");
     setBuildSelection({ type: "project" });
   }
@@ -160,6 +172,10 @@ export default function Home() {
     feedback: "Feedback",
     wishlist: "Wishlist",
     propose: "Propose",
+    billing: "Billing",
+    admin: "Admin",
+    status: "Status",
+    reports: "Reports",
     "cost-center": "Cost Center",
     "client-view": "Client View",
     team: "Team",
@@ -177,6 +193,10 @@ export default function Home() {
         workspaces={workspaces}
         selectedProjectId={selectedProjectId}
         onSelectProject={handleSelectProject}
+        onCreateProject={() => {
+          setSelectedProjectId(null);
+          setProject(null);
+        }}
         onHome={() => setView("dashboard")}
         onLogout={handleLogout}
         onWorkspaceSettings={() => setView("workspace-settings")}
@@ -185,6 +205,9 @@ export default function Home() {
           setView("build");
           setBuildSelection({ type: "project" });
         }}
+        onUserUpdated={() => loadUser()}
+        hasGithubToken={user?.hasGithubToken}
+        githubTokenPreview={user?.githubTokenPreview}
         workspaceName={currentWorkspaceName}
         clientName={currentClientName}
         projectName={currentProjectName}
@@ -193,38 +216,59 @@ export default function Home() {
       />
 
       {!hasProjects || !selectedProjectId ? (
-        <main className="flex-1 p-6 overflow-y-auto">
-          <AddContext
-            projects={allProjects}
-            onUpdate={() => {
-              loadUser();
-              if (selectedProjectId) loadProject(selectedProjectId);
-            }}
-            onProjectSelected={(id) => {
-              setSelectedProjectId(id);
-              setView("dashboard");
-            }}
-          />
-        </main>
+        <CreateProject
+          workspaces={workspaces}
+          onCreated={(id) => {
+            loadUser();
+            setSelectedProjectId(id);
+            setNeedsInitialBuild(true);
+            setView("dashboard");
+          }}
+        />
+      ) : needsInitialBuild ? (
+        <InitialBuild
+          projectId={selectedProjectId}
+          projectName={currentProjectName}
+          onComplete={() => {
+            setNeedsInitialBuild(false);
+            if (selectedProjectId) loadProject(selectedProjectId);
+            setView("dashboard");
+          }}
+        />
       ) : view === "dashboard" ? (
         <Dashboard
           projectId={selectedProjectId}
           projectName={currentProjectName}
           onNavigate={(v) => {
+            if (v === "mobile") {
+              router.push(`/mobile?project=${selectedProjectId}`);
+              return;
+            }
             setView(v);
             if (v === "build") {
               setBuildSelection({ type: "project" });
-              setPreviewMode("collapsed");
-              setMiddleCollapsed(false);
+              setSidebarCollapsed(false);
             }
           }}
         />
       ) : view === "build" && project ? (
-        <div className="flex flex-1 min-h-0">
-          {previewMode === "collapsed" && (
-            middleCollapsed ? (
+        <div className="flex flex-1 min-h-0 flex-col">
+          {/* Back button bar */}
+          <div className="px-4 py-2 border-b border-white/[0.06] bg-[#0c1120] shrink-0">
+            <button
+              onClick={() => setView("dashboard")}
+              className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Dashboard
+            </button>
+          </div>
+          <div className="flex flex-1 min-h-0">
+            {sidebarCollapsed ? (
               <button
-                onClick={() => setMiddleCollapsed(false)}
+                onClick={() => setSidebarCollapsed(false)}
                 className="w-10 border-r border-white/[0.06] bg-[#0c1120] flex flex-col items-center cursor-pointer hover:bg-white/[0.03] transition-colors group"
                 title="Expand features"
               >
@@ -244,26 +288,10 @@ export default function Home() {
                 onSelect={(sel) => setBuildSelection(sel as BuildSelection)}
                 onToggle={handleToggle}
                 onAddFeature={handleAddFeature}
-                onCollapse={() => setMiddleCollapsed(true)}
-                onRenameProject={async (name) => {
-                  await fetch(`/api/projects/${project.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name }),
-                  });
-                  loadUser();
-                  loadProject(project.id);
-                }}
-                onTeamUpdate={() => {
-                  if (selectedProjectId) loadProject(selectedProjectId);
-                  loadUser();
-                }}
-                isAdmin={isAdminForWorkspace(project?.workspaceId)}
+                onCollapse={() => setSidebarCollapsed(true)}
               />
-            )
-          )}
+            )}
 
-          {previewMode !== "full" && (
             <main className="flex-1 p-6 overflow-y-auto">
               {buildSelection.type === "add-major-feature" ? (
                 <AddMajorFeature
@@ -285,7 +313,6 @@ export default function Home() {
                   }}
                   workspaces={workspaces}
                   currentUserId={user?.id}
-                  onOpenPreview={() => setPreviewMode("half")}
                   isAdmin={isAdminForWorkspace(project?.workspaceId)}
                   autoOpenAddFeature={autoOpenAddFeature}
                   onAutoOpenAddFeatureConsumed={() => setAutoOpenAddFeature(false)}
@@ -293,87 +320,18 @@ export default function Home() {
                 />
               )}
             </main>
-          )}
-
-          {previewMode === "collapsed" ? (
-            <button
-              onClick={() => setPreviewMode("half")}
-              className="w-10 border-l border-white/[0.06] bg-[#0a0f1a] flex flex-col items-center cursor-pointer hover:bg-white/[0.03] transition-colors group"
-              title="Expand preview"
-            >
-              <svg className="mt-3 mb-3 text-white/20 group-hover:text-white/40 transition-colors" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              <span className="text-[0.6rem] uppercase tracking-[0.2em] text-white/20 group-hover:text-white/40 transition-colors"
-                style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-              >
-                Preview
-              </span>
-            </button>
-          ) : (
-            <div className="flex-1 border-l border-white/[0.06] bg-[#0a0f1a] flex flex-col min-w-0">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] shrink-0">
-                <span className="text-[0.6rem] uppercase tracking-widest text-white/30">Live Preview</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPreviewMode("half")}
-                    className={`p-1.5 rounded transition-colors ${previewMode === "half" ? "text-white/60 bg-white/[0.08]" : "text-white/20 hover:text-white/40"}`}
-                    title="Half screen"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="12" y="3" width="9" height="18" rx="1" />
-                      <line x1="3" y1="3" x2="3" y2="21" strokeDasharray="2 2" opacity="0.4" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode("full")}
-                    className={`p-1.5 rounded transition-colors ${previewMode === "full" ? "text-white/60 bg-white/[0.08]" : "text-white/20 hover:text-white/40"}`}
-                    title="Full screen"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="1" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode("collapsed")}
-                    className="p-1.5 rounded text-white/20 hover:text-white/40 transition-colors"
-                    title="Collapse preview"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {project.deployStatus === "running" ? (
-                <iframe
-                  src={`/api/preview?projectId=${project.id}`}
-                  className="flex-1 w-full border-0"
-                  title="Full site preview"
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center p-6">
-                  <p className="text-white/30 text-sm text-center">
-                    {project.deployStatus === "starting"
-                      ? "Deploying preview..."
-                      : "Upload a codebase to see a live preview."}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
       ) : view === "workspace-settings" || view === "client-settings" ? (
         <main className="flex-1 p-6 overflow-y-auto">
           <button
             onClick={() => setView("dashboard")}
-            className="flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"
+            className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] px-3 py-1.5 rounded-lg transition-colors mb-4"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Dashboard
+            Dashboard
           </button>
           <ContextPane
             project={null}
@@ -391,12 +349,12 @@ export default function Home() {
         <main className="flex-1 p-6 overflow-y-auto">
           <button
             onClick={() => setView("dashboard")}
-            className="flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"
+            className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] px-3 py-1.5 rounded-lg transition-colors mb-4"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Dashboard
+            Dashboard
           </button>
           <h2 className="text-lg font-medium text-white/80 mb-4">{viewTitles[view] ?? view}</h2>
 
@@ -410,7 +368,14 @@ export default function Home() {
             <PaneWishlist workspaces={workspaces} onUpdate={() => loadUser()} projectId={selectedProjectId} />
           )}
           {view === "propose" && (
-            <PanePropose workspaces={workspaces} projectId={selectedProjectId} />
+            <PanePropose
+              workspaces={workspaces}
+              projectId={selectedProjectId}
+              onStartBilling={(data) => {
+                setBillingPrefill(data);
+                setView("billing");
+              }}
+            />
           )}
           {view === "cost-center" && (
             <PaneCostCenter projectId={selectedProjectId ?? undefined} projectName={currentProjectName} />
@@ -418,8 +383,20 @@ export default function Home() {
           {view === "client-view" && (
             <PaneClientView workspaces={workspaces} projectId={selectedProjectId} />
           )}
+          {view === "billing" && (
+            <PaneBilling projectId={selectedProjectId} projectName={currentProjectName} prefill={billingPrefill} />
+          )}
           {view === "team" && (
             <PaneTeam workspaces={workspaces} onUpdate={() => loadUser()} isAdmin={isAdminForWorkspace()} projectId={selectedProjectId} />
+          )}
+          {view === "admin" && (
+            <PaneAdmin workspaces={workspaces} onUpdate={() => loadUser()} />
+          )}
+          {view === "status" && (
+            <PaneStatus workspaces={workspaces} />
+          )}
+          {view === "reports" && selectedProjectId && (
+            <PaneReports projectId={selectedProjectId} projectName={currentProjectName} />
           )}
         </main>
       )}

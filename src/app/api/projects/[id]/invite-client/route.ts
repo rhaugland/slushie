@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
-
-function toSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
 
 function generatePassword(length = 8): string {
   const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -18,36 +14,41 @@ function generatePassword(length = 8): string {
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const body = await req.json();
+  const email = body.email?.trim()?.toLowerCase();
+
+  if (!email) {
+    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  }
 
   const project = await prisma.project.findUnique({
     where: { id },
     include: { client: true },
   });
   if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const slug = toSlug(project.name);
-  const email = `client@${slug}.preview.slushie.com`;
   const password = generatePassword();
+  const inviteToken = randomUUID();
 
-  // Upsert the user
+  // Create or find the user account for this email
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
     const passwordHash = await hashPassword(password);
     user = await prisma.user.create({
       data: {
         email,
-        name: `${project.client.name} Client`,
+        name: email.split("@")[0],
         passwordHash,
       },
     });
   } else {
-    // Update password on each access so the displayed password matches
+    // Reset password so the invite sender can share it
     const passwordHash = await hashPassword(password);
     user = await prisma.user.update({
       where: { id: user.id },
@@ -55,7 +56,7 @@ export async function POST(
     });
   }
 
-  // Upsert the ClientMember
+  // Upsert the ClientMember with invite token
   let clientMember = await prisma.clientMember.findFirst({
     where: { clientId: project.clientId, userId: user.id },
   });
@@ -64,12 +65,19 @@ export async function POST(
       data: {
         clientId: project.clientId,
         userId: user.id,
+        invitedEmail: email,
+        inviteToken,
         role: "member",
       },
     });
+  } else {
+    clientMember = await prisma.clientMember.update({
+      where: { id: clientMember.id },
+      data: { inviteToken, invitedEmail: email },
+    });
   }
 
-  // Upsert the ClientMemberProject
+  // Ensure project access
   const existingAccess = await prisma.clientMemberProject.findFirst({
     where: { clientMemberId: clientMember.id, projectId: project.id },
   });
@@ -82,5 +90,13 @@ export async function POST(
     });
   }
 
-  return NextResponse.json({ email, password });
+  const origin = req.headers.get("origin") || req.nextUrl.origin;
+  const inviteUrl = `${origin}/portal/login?invite=${inviteToken}&email=${encodeURIComponent(email)}`;
+
+  return NextResponse.json({
+    inviteUrl,
+    email,
+    password,
+    projectName: project.name,
+  });
 }
